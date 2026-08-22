@@ -1,6 +1,7 @@
 package com.tishreen.api;
 
 import com.tishreen.api.shared.Correlation;
+import com.tishreen.api.testsupport.TestProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -14,7 +15,8 @@ import org.springframework.http.ResponseEntity;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Covers the P1-T5 acceptance criteria: health UP and X-Correlation-Id on every response. */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = TestProperties.NO_DATABASE)
 class HealthAndCorrelationIdTest {
 
     @Autowired

@@ -1,5 +1,6 @@
 package com.tishreen.api.shared;
 
+import com.tishreen.api.testsupport.TestProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -14,7 +15,8 @@ import org.springframework.http.ResponseEntity;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Verifies the single ApiError shape from docs/06 §Errors via the test-only error endpoints. */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = TestProperties.NO_DATABASE)
 class GlobalExceptionHandlerTest {
 
     @Autowired
