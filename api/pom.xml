@@ -24,6 +24,7 @@
     <logstash-logback-encoder.version>8.1</logstash-logback-encoder.version>
     <!-- Boot 3.3 manages 1.19.x, whose docker-java speaks API 1.32 — Docker Engine 29 requires ≥1.40 -->
     <testcontainers.version>1.21.4</testcontainers.version>
+    <archunit.version>1.4.1</archunit.version>
   </properties>
 
   <dependencies>
@@ -86,6 +87,12 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.tngtech.archunit</groupId>
+      <artifactId>archunit-junit5</artifactId>
+      <version>${archunit.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
