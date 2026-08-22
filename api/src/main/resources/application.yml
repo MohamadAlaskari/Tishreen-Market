@@ -8,6 +8,16 @@ spring:
     basename: messages
     encoding: UTF-8
     fallback-to-system-locale: false
+  datasource:
+    # Env-first (docs/09 §Configuration); the fallbacks mirror infra/docker-compose.yml so a
+    # fresh clone runs against the dev-only compose database without any setup.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/tishreen}
+    username: ${DB_USER:tishreen}
+    password: ${DB_PASSWORD:tishreen}
+  flyway:
+    # Reference schema + core seed only. The dev profile adds classpath:db/dev (V900 sample
+    # data) — prod must never see it (docs/04 Part B).
+    locations: classpath:db/migration
 
 server:
   port: 8080
@@ -37,6 +47,8 @@ spring:
   config:
     activate:
       on-profile: dev
+  flyway:
+    locations: classpath:db/migration,classpath:db/dev
 
 springdoc:
   api-docs:

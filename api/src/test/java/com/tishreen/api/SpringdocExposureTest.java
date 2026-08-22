@@ -1,5 +1,6 @@
 package com.tishreen.api;
 
+import com.tishreen.api.testsupport.TestProperties;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SpringdocExposureTest {
 
     @Nested
-    @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+    @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+            properties = TestProperties.NO_DATABASE)
     @ActiveProfiles("dev")
     class DevProfile {
 
@@ -32,7 +34,8 @@ class SpringdocExposureTest {
     }
 
     @Nested
-    @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+    @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+            properties = TestProperties.NO_DATABASE)
     class DefaultProfile {
 
         @Autowired
