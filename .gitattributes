@@ -1,0 +1,4 @@
+# Generated files (TanStack Router vite plugin) are always written with LF by
+# their generator. Pin LF so they never show up as falsely "modified" on
+# Windows checkouts with core.autocrlf=true.
+*.gen.ts text eol=lf
