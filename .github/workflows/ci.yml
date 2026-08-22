@@ -16,12 +16,12 @@ jobs:
     name: Web · lint / typecheck / test / build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Liest die pnpm-Version aus dem packageManager-Feld der package.json
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -42,7 +42,7 @@ jobs:
         run: pnpm turbo run build --filter=web
 
       - name: Upload web build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: web-build
           path: apps/web/dist
@@ -55,9 +55,9 @@ jobs:
       run:
         working-directory: api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -67,7 +67,7 @@ jobs:
         run: ./mvnw -B -ntp verify
 
       - name: Upload API jar
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: api-jar
           path: api/target/*.jar
