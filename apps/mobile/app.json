@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "مجمع تشرين",
+    "slug": "tishreen-mobile",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "scheme": "tishreen",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": ["android", "ios"],
+    "extra": {
+      "supportsRTL": true
+    },
+    "plugins": ["expo-localization"],
+    "android": {
+      "package": "com.tishreen.mobile",
+      "edgeToEdgeEnabled": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.tishreen.mobile",
+      "supportsTablet": false
+    }
+  }
+}

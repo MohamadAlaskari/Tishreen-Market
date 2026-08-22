@@ -7,7 +7,7 @@
 ## 1. What we are building
 
 A bilingual (Arabic-first, RTL) grocery e-commerce platform for a single physical store in Aleppo, Syria.
-Five user roles share one REST API and one web app:
+Five user roles share one REST API, one web app (a PWA, including the driver offline shell) and one native mobile app (`apps/mobile`, Expo — ADR-0004):
 
 | Role | Code | What they do |
 |---|---|---|
@@ -50,7 +50,9 @@ Design source: Figma file key `0RLOI0q7lWCK1Rme8JjkKu` (single file, all roles, 
 
 ## 4. Tech stack (locked)
 
-**Frontend** — TanStack Start (React 19, file-based routes) · TypeScript strict · Tailwind v4 · shadcn/ui (CLI-managed, `--rtl`) · react-i18next · TanStack Query · react-hook-form + zod · Leaflet (bundled, no CDN) · vite-plugin-pwa (driver offline shell) · Turborepo monorepo (`apps/web`, `packages/ui`) · pnpm.
+**Frontend (web)** — TanStack Start (React 19, file-based routes) · TypeScript strict · Tailwind v4 · shadcn/ui (CLI-managed, `--rtl`) · react-i18next · TanStack Query · react-hook-form + zod · Leaflet (bundled, no CDN) · vite-plugin-pwa (driver offline shell — the web app **stays a PWA**) · Turborepo monorepo (`apps/web`, `apps/mobile`, `packages/ui`) · pnpm.
+
+**Mobile (native, ADR-0004)** — Expo SDK 57 (React Native 0.86, React 19) · TypeScript strict · i18next + react-i18next (`ar` default, RTL via `expo-localization` `supportsRTL`) · same REST API `/api/v1`, no separate backend · workspace `apps/mobile`; `packages/ui` stays web-only (shadcn/DOM).
 
 **Backend** — Spring Boot 3.3+ (Java 21) · Spring Security (JWT) · Spring Data JPA · PostgreSQL 15 · Flyway · Spring AOP (audit) · Bean Validation · MapStruct (DTO mapping, optional) · springdoc-openapi · Maven (`./mvnw`). Modular Monolith: one package per domain, boundaries enforced by ArchUnit.
 
