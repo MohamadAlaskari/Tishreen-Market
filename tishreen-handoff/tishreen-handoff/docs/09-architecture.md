@@ -125,7 +125,7 @@ public ProductDto updatePrice(@AuditId Long id, BigDecimal price) { … }
 
 **Database in Docker, API and web on the host.** `infra/compose.base.yml` + exactly one overlay `compose.{dev,nearprod,prod}.yml`: `postgres:15` per operating mode — three separate compose projects (`tishreen-dev`/`-nearprod`/`-prod`) with their own volumes and ports; they share no database. A bare `docker compose up` without `-f` fails on purpose. There is no `minio` service (object storage is `local-disk` today; MinIO is planned, Phase 5+). Target deployment is nginx + systemd (§5), not containers.
 
-**Entry point** — `tishreen.ps1` (repo root) drives all of it via a menu: prerequisite checks, per-mode DB lifecycle (up/stop/status/logs/psql/remove incl. volume), API/web starters (`dev` source run · `nearprod` built jar + `vite preview` on profile dev · `prod` profile prod against its own clean DB) and health checks. Manual equivalents: API `./mvnw spring-boot:run -Dspring-boot.run.profiles=dev` (Flyway applies V1, V2, V900) · web `pnpm dev`.
+**Entry point** — `tishreen.ps1` (repo root, ADR-0006) drives all of it via a menu: prerequisite checks, per-mode DB lifecycle (up/stop/status/logs/psql/remove incl. volume), API/web starters (`dev` source run · `nearprod` built jar + `vite preview` on profile dev · `prod` profile prod against its own clean DB) and health checks. Manual equivalents: API `./mvnw spring-boot:run -Dspring-boot.run.profiles=dev` (Flyway applies V1, V2, V900) · web `pnpm dev`.
 
 **Ports per operating mode** (defaults; overridable via the `*_PORT` variables in `infra/.env`):
 

@@ -14,10 +14,10 @@ Branching (ADR-0002): GitHub issue branches off `main` — one branch + PR per t
 2. **P1-T2 Tokens & fonts** — replace generated `globals.css` with `08 §2.1` (rose default + orange + sky blocks + derived tokens); self-host Tajawal, Cairo, IBM Plex Mono and Baloo Bhaijaan 2 (`@font-face`, files in `public/fonts/`; Tufuli Arabic slot prepared for the licensed files); `data-theme` + `.dark` switching on `<html>`; verify the contrast table of `08 §2` for all three presets.
 3. **P1-T3 i18n & direction** — react-i18next, `ar.json` skeleton (`common`, `nav`, `errors`), `en.json`; `<html dir lang>` switching; formatters.
 4. **P1-T4 Layout shells** — `__root`, `_customer` (header, bottom tabs), `_guest`, `_staff`, `_driver`, `_admin`, `_it` with placeholder pages for all 49 routes (titles only) and guards wired to a stub session.
-5. **P1-T5 API project** — Spring Boot 3.3, Java 21, Maven, modules packages, `shared` (Money, LocalizedText, ApiError, Page), `CorrelationIdFilter`, JSON logging, Actuator, springdoc, profiles, Postgres via `infra/compose.base.yml` + `compose.dev.yml` (three operating modes via `tishreen.ps1` — ports and modes in `09 §4`).
+5. **P1-T5 API project** — Spring Boot 3.3, Java 21, Maven, modules packages, `shared` (Money, LocalizedText, ApiError, Page), `CorrelationIdFilter`, JSON logging, Actuator, springdoc, profiles, Postgres via `infra/compose.base.yml` + `compose.dev.yml` (three operating modes via `tishreen.ps1` — ports and modes in `09 §4`, ADR-0006).
 6. **P1-T6 Schema** — `V1__init_schema.sql` from `03-schema.sql` (verbatim), `V2__seed_core_data.sql` from `04-seed.sql` Part A, `db/dev/V900` Part B; Testcontainers smoke test that counts 34 tables.
 7. **P1-T7 ArchUnit** — module boundary tests; `platform` only package importing providers.
-8. **P1-T8 CI** — GitHub Actions: pnpm lint/typecheck/test/build; `./mvnw verify` with Testcontainers; artifact upload.
+8. **P1-T8 CI** — GitHub Actions: pnpm lint/typecheck/test/build; `./mvnw verify` with Testcontainers; artifact upload. Hardening and scope (SonarCloud check, action SHA pinning, `--ignore-scripts`, web-only until #20): ADR-0007.
 
 **Checklist**: app runs in ar/en; `GET /actuator/health` ok; Flyway clean on fresh DB; CI green; hooks in `.claude/` pass on the repo.
 
@@ -97,4 +97,4 @@ Branching (ADR-0002): GitHub issue branches off `main` — one branch + PR per t
 ---
 
 ## Deviations policy
-If implementation must deviate from any of these docs (`00`–`13`), record it as an ADR in `docs/adr/NNNN-<slug>.md` (four-digit ascending number; copy `docs/adr/0000-template.md` — context, decision, consequences) and update the affected doc **in the same PR**. Keep the index `docs/adr/README.md` current; ADRs are mirrored to the wiki automatically (`sync-wiki`).
+If implementation must deviate from any of these docs (`00`–`13`), record it as an ADR in `docs/adr/NNNN-<slug>.md` (four-digit ascending number; copy `docs/adr/0000-template.md` — context, decision, consequences) and update the affected doc **in the same PR**. Keep the index `docs/adr/README.md` current; ADRs are mirrored to the wiki automatically (`sync-wiki`, ADR-0008).

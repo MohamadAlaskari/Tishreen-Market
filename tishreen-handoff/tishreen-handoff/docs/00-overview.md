@@ -45,7 +45,7 @@ Five user roles share one REST API, one web app (a PWA, including the driver off
 | 11 | `11-syria-constraints.md` | Hosting, CDN, fonts, maps, offline driver, backups |
 | 12 | `12-build-plan.md` | Six phases with task lists and acceptance criteria |
 | 13 | `13-quality.md` | Definition of done, test strategy, review checklists |
-| ADR | `adr/` (index: `adr/README.md`) | Architecture Decision Records — every recorded deviation/decision (template `adr/0000-template.md`), mirrored to the wiki |
+| ADR | `adr/` (index: `adr/README.md`) | Architecture Decision Records — every recorded deviation/decision (template `adr/0000-template.md`), mirrored to the wiki (ADR-0008) |
 
 Design source: Figma file key `0RLOI0q7lWCK1Rme8JjkKu` (single file, all roles, light+dark, 49 routed screens + map picker).
 
@@ -55,11 +55,11 @@ Design source: Figma file key `0RLOI0q7lWCK1Rme8JjkKu` (single file, all roles, 
 
 **Mobile (native, ADR-0004)** — Expo SDK 57 (React Native 0.86, React 19) · TypeScript strict · i18next + react-i18next (`ar` default, RTL via `expo-localization` `supportsRTL`) · same REST API `/api/v1`, no separate backend · workspace `apps/mobile`; `packages/ui` stays web-only (shadcn/DOM).
 
-**Backend** — Spring Boot 3.3+ (Java 21) · Spring Security (JWT) · Spring Data JPA · PostgreSQL 15 · Flyway · Spring AOP (audit) · Bean Validation · MapStruct (DTO mapping, optional) · springdoc-openapi · Maven (`./mvnw`). Modular Monolith: one package per domain, boundaries enforced by ArchUnit. Phasing: the Phase-1 skeleton runs on plain `spring-boot-starter-jdbc`; Spring Data JPA entities arrive with Phase 2 (12 P2-T1), MapStruct optionally from then on.
+**Backend** — Spring Boot 3.3+ (Java 21) · Spring Security (JWT) · Spring Data JPA · PostgreSQL 15 · Flyway · Spring AOP (audit) · Bean Validation · MapStruct (DTO mapping, optional) · springdoc-openapi · Maven (`./mvnw`). Modular Monolith: one package per domain, boundaries enforced by ArchUnit. Phasing (ADR-0009): the Phase-1 skeleton runs on plain `spring-boot-starter-jdbc`; Spring Data JPA entities arrive with Phase 2 (12 P2-T1), MapStruct optionally from then on.
 
 **Tests** — JUnit 5 + Mockito + Testcontainers (backend) · Vitest + Testing Library (frontend) · Playwright for the end-to-end order journey.
 
-**Infra** — Docker Compose for the local database only: `infra/compose.base.yml` + one overlay `compose.{dev,nearprod,prod}.yml` — three operating modes driven by `tishreen.ps1`, ports per mode in `09 §4`; object storage is `local-disk` today (MinIO/S3 planned, Phase 5+) · VPS outside US-sanction-blocking providers · nginx reverse proxy · nightly `pg_dump`.
+**Infra** — Docker Compose for the local database only: `infra/compose.base.yml` + one overlay `compose.{dev,nearprod,prod}.yml` — three operating modes driven by `tishreen.ps1` (ADR-0006), ports per mode in `09 §4`; object storage is `local-disk` today (MinIO/S3 planned, Phase 5+) · VPS outside US-sanction-blocking providers · nginx reverse proxy · nightly `pg_dump`.
 
 ## 5. Glossary (Arabic ↔ code) — use these names verbatim
 
