@@ -8,6 +8,7 @@ Entities never leave the service layer — every endpoint speaks DTOs (records).
 ### Auth
 - `Authorization: Bearer <accessToken>` (JWT HS256, 30 min, claims: `sub`=userId, `role`, `status`, `lang`, `perms[]`).
 - Refresh token: HttpOnly, Secure, SameSite=Lax cookie `tishreen_rt` (JWT, 7 days, rotated on each refresh; claim `pv` = password-version derived from `password_hash` prefix so a password change invalidates it).
+  - **Forward note — mobile (ADR-0004):** the Expo app cannot rely on browser cookies. The mobile track will specify a cookie-less refresh variant (refresh token in the response body, kept in secure storage, same rotation and `pv` rules) before mobile auth is implemented. The web contract above stays unchanged.
 - `BLOCKED` users: login `403 USER_BLOCKED`; existing access tokens are rejected by `JwtAuthFilter` which re-checks `users.status` from a 60s cache.
 - Authorization: `@PreAuthorize("hasAuthority('ORDER_MANAGE')")` on controller methods; customer endpoints use `hasRole('CUSTOMER')` + ownership in the service (`404` when not owner).
 
@@ -42,7 +43,12 @@ Generic codes for non-business failures (ADR-0003): `VALIDATION_FAILED` (400, al
 `size` max 100. Every list endpoint is paginated and backed by an index (see `02-data-model.md §14`).
 
 ### Headers
-- `X-Correlation-Id` (in/out), `Idempotency-Key` (driver/staff mutating actions), `ETag`/`If-None-Match` on `/home`, `/theme`, `/categories`.
+- `X-Correlation-Id` (in/out), `Idempotency-Key` (driver/staff mutating actions), `ETag`/`If-None-Match` on `/home`, `/theme`, `/categories`, `/config`.
+
+### Public config (`platform` module)
+| | | |
+|---|---|---|
+| `GET /config` | public | → `{ mapTileUrl, cityCenter: {lat, lng}, weightStepKg: Qty, currency }` — client bootstrap values, read from the `settings` table (`map.tile_url` · `store.city_center_lat`/`store.city_center_lng` · `orders.weight_step_kg` · `store.currency`); ETag, cached 5 min. The settings keys are the **single source of truth**; this endpoint is only their public read model — `settings.map.tile_url` (07, 11) and `GET /config.mapTileUrl` (09 §3) are the same value. |
 
 ### Common DTOs
 ```ts
@@ -252,5 +258,5 @@ Dashboard: `GET /admin/dashboard` → `{ordersToday: {byStatus}, revenue: {today
 - Driver endpoints: `deliveries.driver_id = current` → `404` otherwise.
 - Every mutating endpoint validates its DTO (`@Valid`) and maps to a business exception (`422`) — never a raw `DataIntegrityViolationException`.
 - File uploads: content sniffing (magic bytes), size limit, re-encode to WebP.
-- CORS: only the web origin(s) from `app.cors.origins`; credentials allowed (refresh cookie).
+- CORS: only the web origin(s) from `app.cors.origins`; credentials allowed (refresh cookie). Local modes (no dev proxy — `09 §4`): `http://localhost:3000` (dev) / `:3100` (nearprod) / `:3200` (prod mode); on the VPS web and API share one origin behind nginx.
 - Headers: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, CSP for `/media`.

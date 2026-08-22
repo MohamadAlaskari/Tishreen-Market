@@ -192,7 +192,7 @@ IDs (`F-xx`) are referenced from the build plan and the test plan.
 |---|---|
 | Performance | Catalogue and home pages < 1s TTFB on VPS; list endpoints paginated (max `size=100`); N+1 forbidden (use fetch joins / DTO projections) |
 | Availability | Driver flows usable offline; API restart < 10s; nightly backups with restore test documented |
-| Security | JWT (access 30 min, refresh 7 days rotating), BCrypt 12, rate limits on auth/OTP, ownership checks on every customer endpoint, CORS restricted to app origin, security headers, no secrets in git |
+| Security | JWT (access 30 min, refresh 7 days rotating), BCrypt 12, rate limits on auth/OTP, ownership checks on every customer endpoint, CORS restricted to the web app origin(s) (`app.cors.origins`, credentials for the refresh cookie; no dev proxy — `09 §4`), security headers, no secrets in git |
 | Privacy | Phone numbers masked in logs (`+9639****123`), OTP never logged |
 | Accessibility | WCAG AA contrast (tokens verified), focus visible, 44px touch targets on staff/driver screens |
 | Observability | JSON logs with `correlationId`, `userId`, `role`; Spring Actuator health/metrics; request timing |

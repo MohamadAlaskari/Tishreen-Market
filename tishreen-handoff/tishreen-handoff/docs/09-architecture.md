@@ -3,10 +3,10 @@
 ## 1. Repository layout
 
 ```
-tishreen/
+Tishreen-Market/                  # working repo — implementation at the repo root (ADR-0001)
 ├─ apps/web/                      # TanStack Start (React 19)
 │  ├─ src/routes/                 # file routes (see 07)
-│  ├─ src/features/<domain>/      # api.ts (queries/mutations) · components/ · hooks/ · schemas.ts (zod) · types.ts
+│  ├─ src/features/<domain>/      # (built out per phase) api.ts (queries/mutations) · components/ · hooks/ · schemas.ts (zod) · types.ts
 │  │   auth · catalog · cart · checkout · orders · account · loyalty · support · staff · driver · admin · it
 │  ├─ src/lib/api/                # client.ts (fetch wrapper: base URL, bearer, refresh, correlation id, Accept-Language), types.ts (generated from OpenAPI), errors.ts
 │  ├─ src/lib/auth/               # session store, guards.ts
@@ -15,7 +15,8 @@ tishreen/
 │  ├─ src/locales/ar.json · en.json
 │  ├─ src/styles/globals.css
 │  └─ public/fonts/ · public/icons/ · public/manifest.webmanifest
-├─ packages/ui/                   # shadcn components + brand + custom (qty-stepper, otp-input, status-timeline, map-picker)
+├─ apps/mobile/                   # Expo SDK 57 native app (ADR-0004) — App.tsx · src/i18n/
+├─ packages/ui/                   # shadcn components + brand + custom (qty-stepper, otp-input, status-timeline, map-picker) — web-only (ADR-0004)
 ├─ api/                           # Spring Boot 3 · Java 21 · Maven
 │  ├─ src/main/java/com/tishreen/api/
 │  │  ├─ TishreenApiApplication.java
@@ -27,10 +28,13 @@ tishreen/
 │  ├─ src/main/resources/db/dev/         V900__dev_sample_data.sql (profile dev)
 │  ├─ src/main/resources/messages_ar.properties · messages_en.properties
 │  └─ src/test/java/...                  unit · integration (Testcontainers) · arch (ArchUnit)
-├─ infra/                         # compose.base.yml + compose.{dev,nearprod,prod}.yml · nginx.conf · scripts/backup.sh · scripts/restore.sh
-├─ docs/                          # this package
+├─ infra/                         # compose.base.yml + compose.{dev,nearprod,prod}.yml · README.md (Phase 5 adds nginx.conf, scripts/backup.sh, scripts/restore.sh)
+├─ scripts/                       # sync-wiki.sh · wiki-sync-reminder.sh (wiki mirror of the handoff docs)
+├─ .github/workflows/             # ci.yml · sync-wiki.yml
 ├─ .claude/                       # agents, skills, hooks, settings
-├─ turbo.json · pnpm-workspace.yaml · package.json
+├─ tishreen-handoff/tishreen-handoff/   # canonical docs (this package): docs/00…13 + docs/adr/ (index: adr/README.md)
+├─ tishreen.ps1                   # control script for the local dev stack — three operating modes (§4)
+├─ turbo.json · pnpm-workspace.yaml · package.json · .nvmrc (Node 24)
 └─ CLAUDE.md
 ```
 
@@ -69,7 +73,7 @@ public interface ImageStorage      { String key(); String put(String key, InputS
 public interface PaymentProvider   { String key(); PaymentIntent create(OrderPaymentContext ctx); PaymentResult handleCallback(Map<String,String> payload); boolean cashOnDelivery(); }
 public interface ChatbotProvider   { String key(); BotReply reply(String message, String lang, BotContext ctx); }
 ```
-- Implementations are Spring beans named by key: `manual-whatsapp`, `telegram-bot` (stub), `sms` (stub); `local-disk`, `minio` (`@ConditionalOnProperty(app.storage.minio.enabled)`), `s3` (stub); `cod`; `faq-rules`, `llm` (stub).
+- Implementations are Spring beans named by key: `manual-whatsapp`, `telegram-bot` (stub), `sms` (stub); `local-disk`, `minio` (planned, Phase 5+ — gated by `@ConditionalOnProperty(app.storage.minio.enabled)`), `s3` (stub); `cod`; `faq-rules`, `llm` (stub).
 - `ProviderSelector<T>` picks the active bean **at call time** from `SettingsService.get("notification.provider")` — switching from `/it/providers` needs no restart. `@ConditionalOnProperty` only gates implementations that need external config.
 - Contract tests: each interface has an abstract test class; every implementation must extend it (`ManualWhatsAppChannelTest extends NotificationChannelContractTest`).
 
@@ -86,7 +90,7 @@ public ProductDto updatePrice(@AuditId Long id, BigDecimal price) { … }
 - Rate limiting: `RateLimitFilter` with in-memory token buckets keyed by phone/IP for `/auth/**` and `/staff/otp/generate`.
 - Passwords: `BCryptPasswordEncoder(12)`. OTP: BCrypt(10) or `HmacSHA256` with `app.otp.pepper` env secret.
 - `CorrelationIdFilter` first in chain; JSON logging (logback + `logstash-logback-encoder`) with MDC `correlationId`, `userId`, `role`.
-- Secrets only from environment: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `OTP_PEPPER`, `MINIO_*`. `.env.example` committed, `.env` ignored.
+- Secrets only from environment: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `OTP_PEPPER`, `MINIO_*` (only once MinIO storage is enabled — planned, Phase 5+). `.env.example` committed, `.env` ignored.
 
 ### Configuration
 `application.yml` (profiles `dev`, `prod`): datasource, flyway locations, `app.cors.origins`, `app.storage.local.base-path`, `app.media.public-path=/api/v1/media`, `app.backup.*`, `app.logs.dir`, `springdoc.enabled` (dev/IT). Business settings come from the `settings` table via `SettingsService` (cached, `@CacheEvict` on write).
@@ -113,13 +117,27 @@ public ProductDto updatePrice(@AuditId Long id, BigDecimal price) { … }
 - **Forms**: react-hook-form + zod schemas in `features/*/schemas.ts`; server `422 details.fields` mapped back to form errors.
 - **i18n**: react-i18next, `ar` default, lazy `en`; see `10-i18n.md`.
 - **Offline (driver only)**: `@tanstack/query-persist-client` with IndexedDB persister; mutation queue (`src/lib/offline/queue.ts`) storing `{url, body, idempotencyKey, createdAt}`; replays on `online` event in order; PWA service worker precaches the app shell (`vite-plugin-pwa`, `navigateFallback` for `/driver/*`).
-- **Maps**: `leaflet` + `react-leaflet` bundled; tile URL from `GET /theme`? No — from a public settings endpoint `GET /config` → `{ mapTileUrl, cityCenter, weightStepKg, currency }` (small, cached).
+- **Maps**: `leaflet` + `react-leaflet` bundled; tile URL from the public endpoint `GET /config` → `{ mapTileUrl, cityCenter, weightStepKg, currency }` (small, cached; contract in `06 §1`). The values are read from the `settings` table — `map.tile_url` is the single source of the tile URL, `GET /config.mapTileUrl` is its public read model.
 - **Routing**: layouts own guards + shells; routes own loaders (`loader` uses `queryClient.ensureQueryData`); pending components are skeletons.
 - **Build**: Vite; `pnpm turbo build`; bundle analysis once per phase; no external CDN imports anywhere.
 
 ## 4. Local development
 
-`infra/compose.base.yml` + `compose.{dev,nearprod,prod}.yml`: `postgres:15` per operating mode — three separate compose projects (`tishreen-dev`/`-nearprod`/`-prod`) with their own volumes and ports (5432/5532/5632); optional `minio`. API: `./mvnw spring-boot:run -Dspring-boot.run.profiles=dev` (Flyway applies V1, V2, V900). Web: `pnpm dev` (proxy `/api` → `localhost:8080`). Dev accounts: see `04-seed.sql` Part B (`Tishreen!Dev1`). On Windows, `tishreen.ps1` (repo root) drives all of it via a menu: prerequisite checks, per-mode DB lifecycle (up/stop/status/logs/psql/remove incl. volume), API/web starters (`dev` source run · `nearprod` built jar + `vite preview` on profile dev · `prod` profile prod against its own clean DB) and health checks.
+**Database in Docker, API and web on the host.** `infra/compose.base.yml` + exactly one overlay `compose.{dev,nearprod,prod}.yml`: `postgres:15` per operating mode — three separate compose projects (`tishreen-dev`/`-nearprod`/`-prod`) with their own volumes and ports; they share no database. A bare `docker compose up` without `-f` fails on purpose. There is no `minio` service (object storage is `local-disk` today; MinIO is planned, Phase 5+). Target deployment is nginx + systemd (§5), not containers.
+
+**Entry point** — `tishreen.ps1` (repo root) drives all of it via a menu: prerequisite checks, per-mode DB lifecycle (up/stop/status/logs/psql/remove incl. volume), API/web starters (`dev` source run · `nearprod` built jar + `vite preview` on profile dev · `prod` profile prod against its own clean DB) and health checks. Manual equivalents: API `./mvnw spring-boot:run -Dspring-boot.run.profiles=dev` (Flyway applies V1, V2, V900) · web `pnpm dev`.
+
+**Ports per operating mode** (defaults; overridable via the `*_PORT` variables in `infra/.env`):
+
+| Mode | Compose project | Postgres | API | Web | Spring profile |
+|---|---|---|---|---|---|
+| `dev` (source run) | `tishreen-dev` | `5432` (`DEV_POSTGRES_PORT`) | `8080` (`DEV_API_PORT`) | `3000` (`DEV_WEB_PORT`) | `dev` |
+| `nearprod` (built jar + `vite preview`) | `tishreen-nearprod` | `5532` (`NEARPROD_POSTGRES_PORT`) | `8180` (`NEARPROD_API_PORT`) | `3100` (`NEARPROD_WEB_PORT`) | `dev` |
+| `prod` (same jar, clean DB) | `tishreen-prod` | `5632` (`PROD_POSTGRES_PORT`) | `8280` (`PROD_API_PORT`) | `3200` (`PROD_WEB_PORT`) | `prod` |
+
+**No dev proxy.** The web dev server does not proxy `/api`: the client calls the API directly at `http://localhost:<api-port>/api/v1` (base URL from `VITE_API_URL`, §3). Therefore the API allows the web origin of the running mode via CORS (`app.cors.origins`: `http://localhost:3000` / `:3100` / `:3200`) **with credentials**, so the `tishreen_rt` refresh cookie works cross-origin (`06 §1/§12`, `01 §G`). In the VPS deployment web and API share one origin behind nginx (§5) — the CORS allowlist is a local-development concern.
+
+Dev accounts: see `04-seed.sql` Part B (`Tishreen!Dev1`).
 
 ## 5. Deployment (Phase 5+)
 - Single VPS (non-US-blocking provider), Ubuntu, nginx (TLS, static web, `/api` proxy, `/media` static for local-disk), systemd service for the API (fat jar), Postgres local, fonts/Leaflet/tiles reachability test from inside Syria before launch.
