@@ -3,7 +3,7 @@
 Each phase ends with a runnable, demonstrable outcome and a checklist. Work inside a phase in the listed order;
 each numbered task is one Claude Code session-sized unit (plan → implement → tests → review). Use `/phase <n>` to load the phase context.
 
-Branching: `main` (protected) ← `phase/<n>-<slug>` ← `feat/<task-id>-<slug>`. Commits: conventional (`feat(ordering): finalize order pricing`).
+Branching (ADR-0002): GitHub issue branches off `main` — one branch + PR per ticket (`<issue-nr>-<slug>`, base `main`); merging the PR closes the ticket. Commits: conventional (`feat(ordering): finalize order pricing`).
 
 ---
 
