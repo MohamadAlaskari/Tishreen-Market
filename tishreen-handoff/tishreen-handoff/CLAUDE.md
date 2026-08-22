@@ -9,7 +9,8 @@ one REST API (`/api/v1`), one web app. Design is finished and documented; **impl
 Skills in `.claude/skills/` condense these; agents in `.claude/agents/` review against them.
 
 ## Stack (locked)
-- Web: TanStack Start + React 19 + TypeScript strict + Tailwind v4 + shadcn/ui (CLI only, `--rtl`) + react-i18next + TanStack Query + react-hook-form/zod + Leaflet (bundled). Monorepo `apps/web` + `packages/ui`, **pnpm** + Turborepo.
+- Web: TanStack Start + React 19 + TypeScript strict + Tailwind v4 + shadcn/ui (CLI only, `--rtl`) + react-i18next + TanStack Query + react-hook-form/zod + Leaflet (bundled). Monorepo `apps/web` + `apps/mobile` + `packages/ui`, **pnpm** + Turborepo. Web is and stays a PWA (driver offline shell).
+- Mobile: Expo SDK 57 (React Native 0.86, React 19, TypeScript strict) in `apps/mobile`, same REST API `/api/v1`, i18next ar-first + RTL; `packages/ui` is web-only (ADR-0004).
 - API: Spring Boot 3.3 / Java 21 / Maven (`./mvnw`), Spring Security JWT, Spring Data JPA, PostgreSQL 15, Flyway, Spring AOP audit, springdoc. **Modular monolith**: `identity catalog ordering delivery loyalty support inventory cms platform shared` (ArchUnit-enforced boundaries).
 - Tests: JUnit 5 + Mockito + Testcontainers + ArchUnit · Vitest + Testing Library · Playwright.
 

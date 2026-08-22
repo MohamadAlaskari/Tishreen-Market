@@ -88,5 +88,13 @@ Branching (ADR-0002): GitHub issue branches off `main` — one branch + PR per t
 
 ---
 
+## Mobile track (ADR-0004) — native app alongside the web PWA
+**Outcome**: `apps/mobile` (Expo SDK 57, TypeScript strict) ships the customer experience as a native app; the web app — including the driver PWA offline shell from P5-T3 — stays exactly as specified above.
+
+1. **M-T1 Scaffold** — Expo workspace `apps/mobile` in the monorepo (turbo tasks `dev` `lint` `format` `typecheck`), i18n shell ar/en (no literal UI text), RTL enabled, ESLint + strict tsconfig.
+2. **M-T2+** — mobile feature tickets are cut per feature after the corresponding web phase is done; they reuse the `06-api.md` contracts 1:1 and must respect `11-syria-constraints.md` (bundled assets, APK sideload distribution as Play-Store fallback).
+
+---
+
 ## Deviations policy
 If implementation must deviate from `02`–`08`, record it in `docs/decisions/ADR-<n>-<slug>.md` (context, decision, consequences) and update the affected doc in the same PR.

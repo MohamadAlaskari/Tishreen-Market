@@ -1,0 +1,29 @@
+{
+  "name": "mobile",
+  "version": "0.0.1",
+  "main": "index.ts",
+  "private": true,
+  "scripts": {
+    "dev": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "lint": "eslint",
+    "format": "prettier --write \"**/*.{ts,tsx}\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo": "~57.0.15",
+    "expo-localization": "~57.0.1",
+    "expo-status-bar": "~57.0.1",
+    "i18next": "^26.4.0",
+    "react": "19.2.3",
+    "react-i18next": "^17.0.12",
+    "react-native": "0.86.2"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "eslint": "^9",
+    "eslint-config-expo": "~57.0.1",
+    "typescript": "~6.0.3"
+  }
+}
