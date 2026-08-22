@@ -50,7 +50,7 @@ pnpm dlx shadcn@latest add <component>   # run inside apps/web
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ./mvnw -q test -Dtest=OrderStateMachineTest
 # infra
-docker compose -f infra/docker-compose.yml up -d postgres
+docker compose -f infra/compose.base.yml -f infra/compose.dev.yml up -d
 ```
 
 ## Key identifiers (memorise)

@@ -10,13 +10,13 @@
 # Der Text ist bewusst frei von Umlauten: Windows PowerShell 5.1 liest eine
 # UTF-8-Datei ohne BOM als ANSI und wuerde sie zerlegen.
 #
-# Drei Betriebsarten nach dem Vorbild von eportfolio.ps1 - aber an die
-# Tishreen-Architektur angepasst: API und Web laufen auf dem Host (docs/09
-# Abschnitt 4), Docker dient nur der Datenbank, und das Ziel-Deployment ist
-# nginx + systemd (docs/09 Abschnitt 5), nicht Container. Die Betriebsarten
-# unterscheiden sich also darin, WIE API und Web laufen. Sie haben eigene
-# Ports und koennen nebeneinander laufen; sie teilen sich die EINE Datenbank
-# aus infra/docker-compose.yml.
+# Drei Betriebsarten, drei getrennte Compose-Projekte fuer die Datenbank
+# (tishreen-dev, tishreen-nearprod, tishreen-prod). Sie haben eigene Ports
+# und eigene Volumes und koennen deshalb nebeneinander laufen; sie teilen
+# sich insbesondere KEINE Datenbank. Anders als beim Vorbild eportfolio.ps1
+# laufen API und Web auf dem Host (docs/09 Abschnitt 4): Docker dient nur
+# der Datenbank, das Ziel-Deployment ist nginx + systemd (docs/09
+# Abschnitt 5), nicht Container.
 #
 #   DEV       Quellcode-Betrieb: mvnw spring-boot:run, Vite-Dev-Server.
 #             Profil dev. Zum Entwickeln.
@@ -24,8 +24,10 @@
 #             Profil dev. Prueft den Auslieferungsstand, nicht die
 #             Produktivkonfiguration.
 #   PROD      Dasselbe Jar, aber Profil prod: kein Swagger, kein Dev-Seed.
-#             Laeuft nur mit echten Werten (DB_URL auf eine saubere
-#             Datenbank); ohne sie beendet sich die API absichtlich.
+#             Laeuft gegen die eigene, saubere prod-Datenbank.
+#
+# Jede Betriebsart wird ausdruecklich benannt. "docker compose up" ohne -f
+# scheitert mit "no configuration file provided"; das ist Absicht.
 
 [CmdletBinding()]
 param(
@@ -37,13 +39,17 @@ param(
 Set-StrictMode -Version 2.0
 Set-Location -Path $PSScriptRoot
 
-$ComposeFile = 'infra\docker-compose.yml'
-$EnvFile     = 'infra\.env'
+$BaseFile = 'infra\compose.base.yml'
+$EnvFile  = 'infra\.env'
 
 $Modes = [ordered]@{
 	'dev' = @{
 		Label      = 'DEV / Quellcode-Betrieb'
+		Project    = 'tishreen-dev'
+		File       = 'infra\compose.dev.yml'
 		Profil     = 'dev'
+		DbVar      = 'DEV_POSTGRES_PORT'
+		DbDefault  = '5432'
 		ApiVar     = 'DEV_API_PORT'
 		ApiDefault = '8080'
 		WebVar     = 'DEV_WEB_PORT'
@@ -52,21 +58,29 @@ $Modes = [ordered]@{
 	}
 	'nearprod' = @{
 		Label      = 'NEARPROD / Auslieferungsstand'
+		Project    = 'tishreen-nearprod'
+		File       = 'infra\compose.nearprod.yml'
 		Profil     = 'dev'
+		DbVar      = 'NEARPROD_POSTGRES_PORT'
+		DbDefault  = '5532'
 		ApiVar     = 'NEARPROD_API_PORT'
 		ApiDefault = '8180'
 		WebVar     = 'NEARPROD_WEB_PORT'
 		WebDefault = '3100'
-		Hinweis    = 'Gebautes Jar und gebautes Frontend (vite preview), aber weiterhin Profil dev: Dev-Seed, Swagger an. Prueft den Auslieferungsstand, nicht die Produktivkonfiguration.'
+		Hinweis    = 'Gebautes Jar und gebautes Frontend (vite preview), aber weiterhin Profil dev: eigene Datenbank mit Dev-Seed, Swagger an. Prueft den Auslieferungsstand, nicht die Produktivkonfiguration.'
 	}
 	'prod' = @{
 		Label      = 'PROD / Produktivkonfiguration'
+		Project    = 'tishreen-prod'
+		File       = 'infra\compose.prod.yml'
 		Profil     = 'prod'
+		DbVar      = 'PROD_POSTGRES_PORT'
+		DbDefault  = '5632'
 		ApiVar     = 'PROD_API_PORT'
 		ApiDefault = '8280'
 		WebVar     = 'PROD_WEB_PORT'
 		WebDefault = '3200'
-		Hinweis    = 'Dasselbe Jar, aber Profil prod: kein Swagger, kein Dev-Seed. Braucht echte Werte (DB_URL auf eine saubere Datenbank); ohne sie beendet sich die API absichtlich.'
+		Hinweis    = 'Dasselbe Jar, aber Profil prod: kein Swagger, kein Dev-Seed. Laeuft gegen die eigene, saubere prod-Datenbank (Flyway wendet nur V1 und V2 an).'
 	}
 }
 
@@ -79,11 +93,11 @@ $script:LastDockerExit = 0
 
 function Get-Mode { return $Modes[$script:Mode] }
 
-# Alle Compose-Aufrufe nennen Datei und Env-Datei ausdruecklich. "docker
-# compose up" ohne -f scheitert mit "no configuration file provided"; das
-# ist Absicht.
+# Alle Aufrufe nennen beide Dateien und die Env-Datei. Der Projektname kommt
+# aus dem "name" im Overlay, deshalb braucht es kein zusaetzliches -p.
 function Get-ComposeArgs {
-	return @('-f', $ComposeFile, '--env-file', $EnvFile)
+	$m = Get-Mode
+	return @('-f', $BaseFile, '-f', $m['File'], '--env-file', $EnvFile)
 }
 
 function Write-Head {
@@ -135,7 +149,8 @@ function Confirm-Action {
 
 # Liest einen Wert aus infra/.env. Sie ist die einzige Quelle der Ports und
 # Zugangsdaten und wird nicht eingecheckt; die Defaults spiegeln die
-# Compose-Datei. POSTGRES_PASSWORD wird nirgends gelesen oder angezeigt.
+# Compose-Dateien. POSTGRES_PASSWORD wird nur als Umgebungsvariable an die
+# API weitergereicht und nirgends angezeigt.
 function Get-EnvValue {
 	param([string]$Name, [string]$Default)
 	$envPath = Join-Path $PSScriptRoot $EnvFile
@@ -160,9 +175,13 @@ function Get-WebPort {
 	return Get-EnvValue -Name $m['WebVar'] -Default $m['WebDefault']
 }
 
+function Get-DbPort {
+	$m = Get-Mode
+	return Get-EnvValue -Name $m['DbVar'] -Default $m['DbDefault']
+}
+
 function Get-DbUser { return Get-EnvValue -Name 'POSTGRES_USER' -Default 'tishreen' }
 function Get-DbName { return Get-EnvValue -Name 'POSTGRES_DB' -Default 'tishreen' }
-function Get-DbPort { return Get-EnvValue -Name 'POSTGRES_PORT' -Default '5432' }
 
 # Geprueft wird mit curl.exe, nicht mit Invoke-WebRequest. Grund: gegen den
 # Vite-Dev-Server laeuft der .NET-Webstack in einen Timeout, waehrend curl.exe
@@ -247,9 +266,11 @@ function Test-Voraussetzungen {
 		$ok = $false
 	}
 
-	if (-not (Test-Path (Join-Path $PSScriptRoot $ComposeFile))) {
-		Write-Host "Es fehlt $ComposeFile." -ForegroundColor Red
-		$ok = $false
+	foreach ($file in @($BaseFile, 'infra\compose.dev.yml', 'infra\compose.nearprod.yml', 'infra\compose.prod.yml')) {
+		if (-not (Test-Path (Join-Path $PSScriptRoot $file))) {
+			Write-Host "Es fehlt $file." -ForegroundColor Red
+			$ok = $false
+		}
 	}
 
 	if (-not (Test-Path (Join-Path $PSScriptRoot $EnvFile))) {
@@ -303,7 +324,7 @@ function Show-Adressen {
 		Write-Host "  Swagger-UI    im Profil prod abgeschaltet"
 	}
 	Write-Host "  Health        http://localhost:$apiPort/actuator/health"
-	Write-Host "  Postgres      127.0.0.1:$(Get-DbPort)  (eine Datenbank fuer alle Betriebsarten)"
+	Write-Host "  Postgres      127.0.0.1:$(Get-DbPort)  (Projekt $($m['Project']), eigene Datenbank)"
 }
 
 # --------------------------------------------------------------------------
@@ -315,9 +336,7 @@ function Select-Betriebsart {
 	$keys = @($Modes.Keys)
 	for ($i = 0; $i -lt $keys.Count; $i++) {
 		$m = $Modes[$keys[$i]]
-		$api = Get-EnvValue -Name $m['ApiVar'] -Default $m['ApiDefault']
-		$web = Get-EnvValue -Name $m['WebVar'] -Default $m['WebDefault']
-		Write-Host ("  {0}  {1,-34} Profil {2}, API {3}, Web {4}" -f ($i + 1), $m['Label'], $m['Profil'], $api, $web)
+		Write-Host ("  {0}  {1,-34} Projekt {2}, Profil {3}" -f ($i + 1), $m['Label'], $m['Project'], $m['Profil'])
 	}
 	$answer = Read-Host 'Nummer'
 	$index = 0
@@ -394,22 +413,32 @@ function Invoke-ArtefakteBauen {
 function Start-Api {
 	$m = Get-Mode
 	$apiPort = Get-ApiPort
-	if ($script:Mode -eq 'dev') {
-		$line = "/k mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev -Dspring-boot.run.arguments=--server.port=$apiPort"
+	# Die API bekommt die Datenbank IHRER Betriebsart ueber die Umgebung
+	# (env-first, docs/09 Konfiguration). Das Passwort steht damit weder in
+	# der Anzeige noch auf der Kommandozeile des neuen Fensters.
+	$env:DB_URL      = "jdbc:postgresql://localhost:$(Get-DbPort)/$(Get-DbName)"
+	$env:DB_USER     = Get-DbUser
+	$env:DB_PASSWORD = Get-EnvValue -Name 'POSTGRES_PASSWORD' -Default 'tishreen'
+	try {
+		if ($script:Mode -eq 'dev') {
+			$line = "/k mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev -Dspring-boot.run.arguments=--server.port=$apiPort"
+			Write-Host ''
+			Write-Host "> cmd $line   (neues Fenster, api\)" -ForegroundColor DarkGray
+			Start-Process -FilePath 'cmd.exe' -ArgumentList $line -WorkingDirectory (Join-Path $PSScriptRoot 'api')
+			return
+		}
+		$jar = Find-ApiJar
+		if ($null -eq $jar) {
+			Write-Host 'Kein Jar in api\target. Erst Artefakte bauen (Menuepunkt 4).' -ForegroundColor Yellow
+			return
+		}
+		$line = "/k java -jar target\$($jar.Name) --spring.profiles.active=$($m['Profil']) --server.port=$apiPort"
 		Write-Host ''
 		Write-Host "> cmd $line   (neues Fenster, api\)" -ForegroundColor DarkGray
 		Start-Process -FilePath 'cmd.exe' -ArgumentList $line -WorkingDirectory (Join-Path $PSScriptRoot 'api')
-		return
+	} finally {
+		Remove-Item Env:DB_URL, Env:DB_USER, Env:DB_PASSWORD -ErrorAction SilentlyContinue
 	}
-	$jar = Find-ApiJar
-	if ($null -eq $jar) {
-		Write-Host 'Kein Jar in api\target. Erst Artefakte bauen (Menuepunkt 4).' -ForegroundColor Yellow
-		return
-	}
-	$line = "/k java -jar target\$($jar.Name) --spring.profiles.active=$($m['Profil']) --server.port=$apiPort"
-	Write-Host ''
-	Write-Host "> cmd $line   (neues Fenster, api\)" -ForegroundColor DarkGray
-	Start-Process -FilePath 'cmd.exe' -ArgumentList $line -WorkingDirectory (Join-Path $PSScriptRoot 'api')
 }
 
 function Start-Web {
@@ -440,14 +469,6 @@ function Start-Betriebsart {
 	Write-Head "$($m['Label']) starten"
 	Write-Host $m['Hinweis'] -ForegroundColor DarkGray
 
-	if ($script:Mode -eq 'prod') {
-		Write-Host ''
-		Write-Host 'Profil prod braucht echte Werte (DB_URL/DB_USER/DB_PASSWORD auf eine' -ForegroundColor Yellow
-		Write-Host 'saubere Datenbank). Gegen die Dev-DB mit Dev-Seed V900 bricht Flyway' -ForegroundColor Yellow
-		Write-Host 'absichtlich ab. Genau so ist die Fail-Fast-Regel gemeint; die Meldung' -ForegroundColor Yellow
-		Write-Host 'steht danach im API-Fenster.' -ForegroundColor Yellow
-	}
-
 	if ($Build) {
 		if (-not (Invoke-ArtefakteBauen)) { return }
 	}
@@ -460,11 +481,16 @@ function Start-Betriebsart {
 }
 
 function Show-Status {
-	Write-Head 'Status: Datenbank-Container'
+	Write-Head "Status: $((Get-Mode)['Label'])"
 	Invoke-Compose @('ps', '--format', 'table {{.Name}}\t{{.Status}}\t{{.Ports}}')
 	Write-Host ''
 	Write-Host 'API und Web laufen auf dem Host in eigenen Fenstern; ihren Zustand' -ForegroundColor DarkGray
 	Write-Host 'zeigt Menuepunkt 8 (Gesundheit pruefen).' -ForegroundColor DarkGray
+}
+
+function Show-StatusAlle {
+	Write-Head 'Status aller Betriebsarten'
+	Invoke-Docker @('ps', '--filter', 'name=tishreen-', '--format', 'table {{.Names}}\t{{.Status}}\t{{.Ports}}')
 }
 
 function Test-Gesundheit {
@@ -473,9 +499,9 @@ function Test-Gesundheit {
 	$m = Get-Mode
 	Write-Head "Gesundheit: $($m['Label'])"
 	if (Invoke-Quiet 'docker' ((@('compose') + (Get-ComposeArgs)) + @('exec', '-T', 'postgres', 'pg_isready', '-U', (Get-DbUser), '-d', (Get-DbName)))) {
-		Write-Host ("  {0,-30} bereit (127.0.0.1:{1})" -f 'Postgres (gemeinsam)', (Get-DbPort)) -ForegroundColor Green
+		Write-Host ("  {0,-30} bereit (127.0.0.1:{1})" -f 'Postgres', (Get-DbPort)) -ForegroundColor Green
 	} else {
-		Write-Host ("  {0,-30} nicht bereit (Menuepunkt 3)" -f 'Postgres (gemeinsam)') -ForegroundColor Red
+		Write-Host ("  {0,-30} nicht bereit (Menuepunkt 3)" -f 'Postgres') -ForegroundColor Red
 	}
 	Test-Endpoint -Label 'Oberflaeche' -Url "http://localhost:$webPort/"
 	Test-Endpoint -Label 'API Health' -Url "http://localhost:$apiPort/actuator/health"
@@ -485,16 +511,6 @@ function Test-Gesundheit {
 		Write-Host '  OpenAPI-Dokument               im Profil prod abgeschaltet, 404 erwartet' -ForegroundColor DarkGray
 		Test-Endpoint -Label 'OpenAPI-Dokument' -Url "http://localhost:$apiPort/api/v1/docs"
 	}
-}
-
-function Test-GesundheitAlle {
-	Write-Head 'Gesundheit aller Betriebsarten'
-	$merken = $script:Mode
-	foreach ($key in @($Modes.Keys)) {
-		$script:Mode = $key
-		Test-Gesundheit
-	}
-	$script:Mode = $merken
 }
 
 # Folgt den Datenbank-Logs. Strg+C beendet NUR diese Anzeige: solange der
@@ -532,14 +548,14 @@ function Watch-DbLogs {
 }
 
 function Open-Psql {
-	Write-Head "psql als $(Get-DbUser) in $(Get-DbName)"
-	Write-Host 'Die Datenbank ist fuer alle Betriebsarten dieselbe. Beenden mit \q' -ForegroundColor DarkGray
+	Write-Head "psql als $(Get-DbUser) in $(Get-DbName) ($((Get-Mode)['Label']))"
+	Write-Host 'Jede Betriebsart hat ihre eigene Datenbank. Beenden mit \q' -ForegroundColor DarkGray
 	Invoke-Compose @('exec', 'postgres', 'psql', '-U', (Get-DbUser), '-d', (Get-DbName))
 }
 
 function Invoke-ApiTests {
 	Write-Head 'API-Tests auf dem Host'
-	Write-Host 'Laufen gegen die Datenbank aus infra\docker-compose.yml (POSTGRES_PORT).' -ForegroundColor DarkGray
+	Write-Host 'Integrationstests nutzen Testcontainers und starten ihre eigene Datenbank.' -ForegroundColor DarkGray
 	Push-Location (Join-Path $PSScriptRoot 'api')
 	try {
 		Write-Host ''
@@ -586,26 +602,32 @@ function Start-Mobile {
 	Start-Process -FilePath 'cmd.exe' -ArgumentList '/k pnpm dev' -WorkingDirectory (Join-Path $PSScriptRoot 'apps\mobile')
 }
 
-function Stop-Datenbank {
-	Write-Head 'Datenbank stoppen'
-	Write-Host 'Container und Daten bleiben; der naechste Start ist schnell.' -ForegroundColor DarkGray
-	Invoke-Compose @('stop')
-}
-
-function Remove-DatenbankContainer {
-	Write-Head 'Datenbank-Container entfernen'
-	Write-Host 'Das Volume tishreen-pgdata und damit die Daten bleiben erhalten.' -ForegroundColor DarkGray
-	Invoke-Compose @('down', '--remove-orphans')
-}
-
-function Remove-Datenbank {
-	Write-Head 'Datenbank vollstaendig entfernen'
-	Write-Host 'Das loescht den Postgres-Container UND das Volume tishreen-pgdata' -ForegroundColor Yellow
-	Write-Host '(Docker-Name: infra_tishreen-pgdata). Die Datenbank ist fuer ALLE' -ForegroundColor Yellow
-	Write-Host 'Betriebsarten dieselbe.' -ForegroundColor Yellow
-	if (Confirm-Action 'Alle lokalen Datenbank-Daten sind danach weg.') {
+function Remove-Betriebsart {
+	$m = Get-Mode
+	Write-Head "$($m['Label']) vollstaendig entfernen"
+	Write-Host "Das loescht Container und Volume des Projekts $($m['Project']):" -ForegroundColor Yellow
+	Write-Host '  - den Datenbankinhalt dieser Betriebsart'
+	Write-Host 'Die anderen beiden Betriebsarten bleiben unberuehrt.'
+	if (Confirm-Action 'Daten dieser Betriebsart sind danach weg.') {
 		Invoke-Compose @('down', '-v', '--remove-orphans')
 	}
+}
+
+function Remove-Alles {
+	Write-Head 'Alle drei Betriebsarten vollstaendig entfernen'
+	Write-Host 'Das loescht Container und Volumes aller drei Projekte:' -ForegroundColor Yellow
+	Write-Host '  - drei Datenbankinhalte (tishreen-dev, tishreen-nearprod, tishreen-prod)'
+	Write-Host 'Andere Docker-Projekte bleiben unberuehrt.'
+	if (-not (Confirm-Action 'Es bleibt nichts uebrig.')) { return }
+
+	$merken = $script:Mode
+	foreach ($key in @($Modes.Keys)) {
+		$script:Mode = $key
+		Invoke-Compose @('down', '-v', '--remove-orphans')
+	}
+	$script:Mode = $merken
+	Write-Host ''
+	Write-Host 'Fertig.' -ForegroundColor Green
 }
 
 # --------------------------------------------------------------------------
@@ -620,7 +642,7 @@ function Show-Menu {
 	Write-Host '=====================================================' -ForegroundColor Cyan
 	Write-Host ''
 	Write-Host (" Betriebsart : {0}" -f $m['Label']) -ForegroundColor Green
-	Write-Host ("               Spring-Profil {0}, API {1}, Oberflaeche {2}, Postgres {3}" -f $m['Profil'], (Get-ApiPort), (Get-WebPort), (Get-DbPort)) -ForegroundColor DarkGray
+	Write-Host ("               Projekt {0}, Spring-Profil {1}, API {2}, Oberflaeche {3}, Postgres {4}" -f $m['Project'], $m['Profil'], (Get-ApiPort), (Get-WebPort), (Get-DbPort)) -ForegroundColor DarkGray
 	Write-Host ''
 	Write-Host '   b  Betriebsart wechseln' -ForegroundColor White
 	Write-Host ''
@@ -632,15 +654,15 @@ function Show-Menu {
 	Write-Host '   5  Artefakte sauber neu bauen    (mvnw clean package, bei kaputtem target\)'
 	Write-Host ''
 	Write-Host ' Beobachten' -ForegroundColor White
-	Write-Host '   6  Status                        (Datenbank-Container)'
-	Write-Host '   7  Gesundheit ALLER Betriebsarten'
+	Write-Host '   6  Status'
+	Write-Host '   7  Status ALLER Betriebsarten'
 	Write-Host '   8  Gesundheit pruefen            (Postgres, Oberflaeche, Health, OpenAPI)'
 	Write-Host '   9  Logs folgen: Datenbank        (Strg+C beendet nur die Anzeige)'
 	Write-Host '      API und Web loggen in ihren eigenen Fenstern.' -ForegroundColor DarkGray
 	Write-Host ''
 	Write-Host ' Arbeiten' -ForegroundColor White
 	Write-Host '  10  psql in der Datenbank'
-	Write-Host '  11  API-Tests auf dem Host        (.\mvnw.cmd verify)'
+	Write-Host '  11  API-Tests auf dem Host        (.\mvnw.cmd verify, Testcontainers)'
 	Write-Host '  12  Web-Tests auf dem Host        (pnpm test in apps\web, Vitest)'
 	Write-Host '  13  Lint auf dem Host             (pnpm lint ueber Turbo)'
 	Write-Host '  14  Typecheck auf dem Host        (pnpm typecheck ueber Turbo)'
@@ -648,9 +670,10 @@ function Show-Menu {
 	Write-Host '  16  Mobile: Expo-Dev-Server       (neues Fenster)'
 	Write-Host ''
 	Write-Host ' Aufraeumen' -ForegroundColor White
-	Write-Host '  17  Datenbank stoppen             (Container und Daten bleiben)'
-	Write-Host '  18  Datenbank-Container entfernen (Volume und Daten bleiben)'
-	Write-Host '  19  Datenbank vollstaendig entfernen   [inkl. Volume tishreen-pgdata]'
+	Write-Host '  17  Stoppen                       (Container und Daten bleiben)'
+	Write-Host '  18  Container entfernen           (Volumes bleiben erhalten)'
+	Write-Host '  19  Diese Betriebsart entfernen   [inkl. ihrer Datenbank]'
+	Write-Host '  20  ALLE drei Betriebsarten entfernen  [Container und Volumes]'
 	Write-Host ''
 	Write-Host '   0  Beenden' -ForegroundColor White
 	Write-Host ''
@@ -705,7 +728,7 @@ while ($running) {
 		'4'  { Write-Head 'Artefakte bauen, ohne zu starten'; Invoke-ArtefakteBauen | Out-Null }
 		'5'  { Write-Head 'Artefakte sauber neu bauen'; Invoke-ArtefakteBauen -Clean | Out-Null }
 		'6'  { Show-Status }
-		'7'  { Test-GesundheitAlle }
+		'7'  { Show-StatusAlle }
 		'8'  { Test-Gesundheit }
 		'9'  { Watch-DbLogs }
 		'10' { Open-Psql }
@@ -715,9 +738,10 @@ while ($running) {
 		'14' { Invoke-TurboTask -Task 'typecheck' }
 		'15' { Invoke-TurboTask -Task 'format' }
 		'16' { Start-Mobile }
-		'17' { Stop-Datenbank }
-		'18' { Remove-DatenbankContainer }
-		'19' { Remove-Datenbank }
+		'17' { Write-Head 'Stoppen'; Invoke-Compose @('stop') }
+		'18' { Write-Head 'Container entfernen'; Invoke-Compose @('down', '--remove-orphans') }
+		'19' { Remove-Betriebsart }
+		'20' { Remove-Alles }
 		'0'  { $running = $false }
 		default { Write-Host ''; Write-Host "Unbekannte Auswahl: $choice" -ForegroundColor Red }
 	}

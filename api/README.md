@@ -6,7 +6,7 @@ Spring Boot 3.3 / Java 21 / Maven — Modularer Monolith (docs/09). Module:
 ## Starten (dev)
 
 ```bash
-docker compose -f ../infra/docker-compose.yml up -d postgres   # DB (ab P1-T6 benötigt)
+docker compose -f ../infra/compose.base.yml -f ../infra/compose.dev.yml up -d   # DB (ab P1-T6 benötigt)
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 

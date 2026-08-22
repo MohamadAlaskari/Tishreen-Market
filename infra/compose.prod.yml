@@ -1,0 +1,10 @@
+# PROD operating mode: own compose project, own volume, own port. This is the
+# clean database for the prod Spring profile (no V900 dev seed).
+# Use together with compose.base.yml:
+#   docker compose -f infra/compose.base.yml -f infra/compose.prod.yml up -d
+name: tishreen-prod
+services:
+  postgres:
+    ports:
+      # Loopback only: a dev DB with well-known credentials must not listen on the LAN.
+      - "127.0.0.1:${PROD_POSTGRES_PORT:-5632}:5432"
