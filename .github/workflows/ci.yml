@@ -11,6 +11,9 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   web:
     name: Web · lint / typecheck / test / build
@@ -18,8 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Liest die pnpm-Version aus dem packageManager-Feld der package.json
-      - uses: pnpm/action-setup@v4
+      # Liest die pnpm-Version aus dem packageManager-Feld der package.json;
+      # Drittanbieter-Action, daher auf vollen Commit-SHA gepinnt (Sonar S7637)
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - uses: actions/setup-node@v5
         with:
@@ -27,7 +31,9 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        # --ignore-scripts (Sonar S6505): esbuild/lightningcss liefern ihre
+        # Binaries als optionalDependencies, Lifecycle-Skripte sind unnötig
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Lint
         run: pnpm turbo run lint --filter=web
