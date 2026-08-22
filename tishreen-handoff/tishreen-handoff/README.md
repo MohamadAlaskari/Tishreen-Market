@@ -39,6 +39,7 @@ tishreen-handoff/
 ```
 
 ## Install (5 minutes)
+> **Note (ADR-0001):** implementation proceeds directly in the `Tishreen-Market` repository (this package stays in `tishreen-handoff/tishreen-handoff/` as the canonical source); steps 1–3 below describe the original standalone setup and are kept for reference.
 1. Create the repository root `tishreen/` and copy **everything in this folder** into it (including the hidden `.claude/`, `.cursor/`, `.env.example`, `.gitignore`).
 2. `chmod +x .claude/hooks/*.sh` (Linux/macOS/WSL). Hooks need `bash` and `grep -P`; `jq` or `python3` is used to parse hook input if present. On Windows run Claude Code inside WSL or Git Bash.
 3. `git init && git add -A && git commit -m "chore: handoff package"`.

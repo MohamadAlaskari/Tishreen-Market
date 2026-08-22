@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: tishreen-api
+  web:
+    # Accept-Language resolution; Arabic is the default and fallback language (docs/06, docs/10).
+    locale: ar
+  messages:
+    basename: messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+# JSON log files land here; /it/logs reads them later (docs/09 §Configuration).
+app:
+  logs:
+    dir: ${LOGS_DIR:logs}
+
+# springdoc is opt-in: only the dev profile (and later IT) exposes it (docs/09).
+# The OpenAPI document is served at /api/v1/docs (docs/06 — route name is contractual).
+springdoc:
+  api-docs:
+    enabled: false
+    path: /api/v1/docs
+  swagger-ui:
+    enabled: false
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+server:
+  port: ${PORT:8080}

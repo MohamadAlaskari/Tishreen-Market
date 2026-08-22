@@ -1,0 +1,3 @@
+target/
+logs/
+.flattened-pom.xml
