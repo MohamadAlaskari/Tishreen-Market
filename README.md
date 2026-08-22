@@ -45,6 +45,20 @@ tishreen-handoff/
 4. Open Claude Code in the folder (`claude`), or Cursor with the Claude Code extension. The `SessionStart` hook prints the orientation line; `CLAUDE.md` is loaded automatically.
 5. First session: `/phase 1 start` → it lists Phase-1 tasks from `docs/12-build-plan.md` and creates the branch. Then `/phase 1 next` for each task.
 
+## Local development on Windows (`tishreen.ps1`)
+
+`.\tishreen.ps1` in the repo root is a menu-driven control script for the local dev stack from `docs/09-architecture.md` §4 (runs unchanged on Windows PowerShell 5.1 and PowerShell 7):
+
+- menu and structure follow the proven `eportfolio.ps1` pattern (sections Starten und bauen / Beobachten / Arbeiten / Aufraeumen, command echo, address list after start), mapped onto the Tishreen stack.
+- operating modes `dev` / `nearprod` / `prod` (preselect with `-Mode`, switch with `b` in the menu): `dev` runs API and web from source (`mvnw spring-boot:run`, Vite dev server), `nearprod` runs the built jar and the built frontend (`vite preview`) still on Spring profile `dev` (delivery check), `prod` runs the jar with profile `prod` — no Swagger, no dev seed, against its own clean database. Every mode has its own database: three separate compose projects (`tishreen-dev` / `tishreen-nearprod` / `tishreen-prod`, `infra/compose.base.yml` + per-mode overlay) with their own volumes — they share nothing and can run side by side. Per-mode ports (DB/API/web): 5432/8080/3000, 5532/8180/3100, 5632/8280/3200, overridable via `infra/.env`. Only API and web run on the host, since the target deployment is nginx + systemd (docs/09 §5), not containers; the script wires each API window to its mode's DB via `DB_URL`/`DB_USER`/`DB_PASSWORD` environment variables.
+- checks every prerequisite up front (Docker daemon, Compose v2, `infra/.env`, Node, pnpm, JDK) and names what is missing instead of failing later with raw Compose/Maven errors; offers to start Docker Desktop. `.\tishreen.ps1 -Check` runs only this check (non-interactive, exit code 0/1).
+- database (per mode): start (waits until `pg_isready` is green), stop, status (one mode or all three), follow logs (Ctrl+C only ends the view, not the container), `psql` shell, removal of one mode or of all three including their volumes (guarded by an explicit confirmation).
+- API: start per mode in a new window; build the delivery artifacts (`mvnw -DskipTests package` + `pnpm build`); `mvnw verify`.
+- web: start per mode in a new window; web tests (`pnpm test`, Vitest), `lint`/`typecheck`/`format` via Turbo; optional Expo start for `apps/mobile`.
+- health check: Postgres (`pg_isready`), UI, API health and OpenAPI document on the current mode's ports via `curl.exe` (a 4xx answer counts as alive).
+
+Ports and credentials are read from `infra/.env` (fallback: the defaults in the `infra/compose.*.yml` files); secrets are never printed.
+
 ## How to work
 - **One task per session**, sized by `docs/12`. Say **«weiter» / «كمّل»** to move to the next task.
 - Use the slash commands instead of free-form prompts when they fit: `/new-endpoint POST /orders`, `/new-route /staff/orders/:id`, `/new-migration add index …`, `/review-rtl`, `/review-tokens 8:5`, `/preflight` before every commit, `/phase n checklist` at the end of a phase.

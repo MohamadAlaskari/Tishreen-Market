@@ -27,7 +27,7 @@ tishreen/
 │  ├─ src/main/resources/db/dev/         V900__dev_sample_data.sql (profile dev)
 │  ├─ src/main/resources/messages_ar.properties · messages_en.properties
 │  └─ src/test/java/...                  unit · integration (Testcontainers) · arch (ArchUnit)
-├─ infra/                         # docker-compose.yml · nginx.conf · scripts/backup.sh · scripts/restore.sh
+├─ infra/                         # compose.base.yml + compose.{dev,nearprod,prod}.yml · nginx.conf · scripts/backup.sh · scripts/restore.sh
 ├─ docs/                          # this package
 ├─ .claude/                       # agents, skills, hooks, settings
 ├─ turbo.json · pnpm-workspace.yaml · package.json
@@ -119,7 +119,7 @@ public ProductDto updatePrice(@AuditId Long id, BigDecimal price) { … }
 
 ## 4. Local development
 
-`infra/docker-compose.yml`: `postgres:15` (port 5432, volume), optional `minio`. API: `./mvnw spring-boot:run -Dspring-boot.run.profiles=dev` (Flyway applies V1, V2, V900). Web: `pnpm dev` (proxy `/api` → `localhost:8080`). Dev accounts: see `04-seed.sql` Part B (`Tishreen!Dev1`).
+`infra/compose.base.yml` + `compose.{dev,nearprod,prod}.yml`: `postgres:15` per operating mode — three separate compose projects (`tishreen-dev`/`-nearprod`/`-prod`) with their own volumes and ports (5432/5532/5632); optional `minio`. API: `./mvnw spring-boot:run -Dspring-boot.run.profiles=dev` (Flyway applies V1, V2, V900). Web: `pnpm dev` (proxy `/api` → `localhost:8080`). Dev accounts: see `04-seed.sql` Part B (`Tishreen!Dev1`). On Windows, `tishreen.ps1` (repo root) drives all of it via a menu: prerequisite checks, per-mode DB lifecycle (up/stop/status/logs/psql/remove incl. volume), API/web starters (`dev` source run · `nearprod` built jar + `vite preview` on profile dev · `prod` profile prod against its own clean DB) and health checks.
 
 ## 5. Deployment (Phase 5+)
 - Single VPS (non-US-blocking provider), Ubuntu, nginx (TLS, static web, `/api` proxy, `/media` static for local-disk), systemd service for the API (fat jar), Postgres local, fonts/Leaflet/tiles reachability test from inside Syria before launch.

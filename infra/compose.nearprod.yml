@@ -1,0 +1,9 @@
+# NEARPROD operating mode: own compose project, own volume, own port.
+# Use together with compose.base.yml:
+#   docker compose -f infra/compose.base.yml -f infra/compose.nearprod.yml up -d
+name: tishreen-nearprod
+services:
+  postgres:
+    ports:
+      # Loopback only: a dev DB with well-known credentials must not listen on the LAN.
+      - "127.0.0.1:${NEARPROD_POSTGRES_PORT:-5532}:5432"
