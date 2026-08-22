@@ -59,7 +59,11 @@ for f in "$SRC"/docs/*.md; do
 done
 sql_page "$SRC/docs/03-schema.sql" "03-schema-sql.md"
 sql_page "$SRC/docs/04-seed.sql"  "04-seed-sql.md"
-md_page  "$SRC/docs/adr/0000-template.md" "adr-0000-template.md"
+
+# Entscheidungen: ALLE ADRs spiegeln (neue Entscheidungen landen automatisch im Wiki)
+for f in "$SRC"/docs/adr/*.md; do
+  md_page "$f" "adr-$(basename "$f")"
+done
 
 # Projektregeln (Claude Code Projektgedächtnis)
 md_page "$SRC/CLAUDE.md" "Rules.md"
@@ -109,8 +113,13 @@ cat > "$WIKI/_Sidebar.md" <<'EOF'
 - [[11-syria-constraints]]
 - [[12-build-plan]]
 - [[13-quality]]
-- [[adr-0000-template]]
 EOF
+{
+  printf '\n**Entscheidungen (ADR)**\n\n'
+  for f in "$SRC"/docs/adr/*.md; do
+    printf -- '- [[adr-%s]]\n' "$(basename "$f" .md)"
+  done
+} >> "$WIKI/_Sidebar.md"
 echo "  → _Sidebar.md"
 
 cat > "$WIKI/_Footer.md" <<EOF
