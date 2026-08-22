@@ -24,7 +24,7 @@ Voraussetzung: `gh` CLI eingeloggt (`gh auth status`). Falls nicht: stoppen und 
 
    ```markdown
    ## Context
-   Warum / Ziel. Verweise auf die Spezifikation, z. B. docs/05 §1, F-21, Figma-Node.
+   Warum / Ziel. Verweise auf die Spezifikation, z. B. tishreen-handoff/tishreen-handoff/docs/05 §1, F-21, Figma-Node.
 
    ## Scope / Tasks
    - [ ] ...
@@ -37,13 +37,13 @@ Voraussetzung: `gh` CLI eingeloggt (`gh auth status`). Falls nicht: stoppen und 
    - Blocks: #20
 
    ## References
-   docs/<datei> · verwandt: #N
+   tishreen-handoff/tishreen-handoff/docs/<datei> · verwandt: #N
    ```
 
    Keine Abhängigkeit → `- Blocked by: none` / `- Blocks: none`.
 4. **Anlegen:**
    ```bash
-   gh issue create --title "feat(ordering): finalize order pricing" --body-file /tmp/ticket-body.md
+   gh issue create --title "feat(ordering): finalize order pricing" --body-file "$TEMP/ticket-body.md"
    # + --label blocked  wenn "Blocked by" mindestens ein offenes Ticket enthält
    ```
 5. **Gegenseiten spiegeln (Pflicht, sofort):**
@@ -82,11 +82,9 @@ git add api/src/main/java/com/tishreen/api/ordering/application/PricingService.j
         api/src/test/java/com/tishreen/api/ordering/PricingServiceTest.java
 git commit -m "feat(ordering): finalize order pricing (#42)
 
-Recompute line totals from actual weights; cap FIXED offers at actual goods.
-
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+Recompute line totals from actual weights; cap FIXED offers at actual goods."
 ```
-Format: `type(scope): summary (#ticket)` — conventional commit, Scope = Modul, Ticket-Nummer im Titel.
+Format: `type(scope): summary (#ticket)` — conventional commit, Scope = Modul, Ticket-Nummer im Titel. Nie einen `Co-Authored-By`-Trailer oder eine andere KI-Attribution anhängen (Projektregel: alles läuft unter Mohamads Namen).
 
 **b) PR-Titel:** identisch zum Commit-Summary, z. B. `feat(ordering): finalize order pricing (#42)`.
 
@@ -104,8 +102,6 @@ Was wurde umgesetzt und warum (1–3 Sätze, Bezug zur Spezifikation).
 ## Tickets
 Closes #42
 Entsperrt danach: #43, #44   <!-- aus der Blocks:-Liste des Tickets -->
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
 
-Wird der PR direkt angelegt: `gh pr create --title "…" --body-file /tmp/pr-body.md`. Nach dem Merge Abschnitt 3 für die abhängigen Tickets ausführen.
+Wird der PR direkt angelegt: `gh pr create --title "…" --body-file "$TEMP/pr-body.md"`. Nach dem Merge Abschnitt 3 für die abhängigen Tickets ausführen.

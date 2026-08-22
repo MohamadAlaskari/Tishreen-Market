@@ -16,7 +16,8 @@ case "$f" in
   */tishreen-handoff/tishreen-handoff/docs/* \
   | */tishreen-handoff/tishreen-handoff/CLAUDE.md \
   | */tishreen-handoff/tishreen-handoff/README.md \
-  | */tishreen-handoff/tishreen-handoff/.cursor/rules/*)
+  | */.cursor/rules/* \
+  | .cursor/rules/*)
     echo "WIKI-SYNC NÖTIG: '$f' wird ins GitHub-Wiki gespiegelt. Nach Commit+Push auf main synchronisiert die GitHub-Action automatisch; für sofortigen Sync: bash scripts/sync-wiki.sh --push" >&2
     exit 2
     ;;
