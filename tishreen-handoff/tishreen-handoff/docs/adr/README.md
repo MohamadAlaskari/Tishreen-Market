@@ -12,3 +12,7 @@ add the new ADR to this index, and the `sync-wiki` Action mirrors everything to 
 | 0003 | [Generic error codes for framework-level failures](0003-generic-error-codes.md) | accepted | 2026-08-22 |
 | 0004 | [Add a native mobile app (`apps/mobile`, Expo) alongside the web PWA](0004-add-native-mobile-app-expo.md) | accepted | 2026-08-22 |
 | 0005 | [ArchUnit layer dependency matrix and the domain-enum exception](0005-archunit-layer-matrix-domain-enums.md) | accepted | 2026-08-22 |
+| 0006 | [`tishreen.ps1` control script and one database per operating mode](0006-tishreen-ps1-three-operating-modes.md) | accepted | 2026-08-22 |
+| 0007 | [CI hardening and scope (SonarCloud, SHA pinning, web-only)](0007-ci-hardening-and-scope.md) | accepted | 2026-08-22 |
+| 0008 | [Wiki mirror as the authoritative reference (`sync-wiki`)](0008-wiki-sync-authoritative-reference.md) | accepted | 2026-08-22 |
+| 0009 | [Plain JDBC in Phase 1; Spring Data JPA and MapStruct from Phase 2](0009-jdbc-phase1-jpa-phase2.md) | accepted | 2026-08-22 |

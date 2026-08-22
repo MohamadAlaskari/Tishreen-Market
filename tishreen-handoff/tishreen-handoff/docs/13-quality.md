@@ -10,6 +10,7 @@
 - [ ] Comments explain **why**, not what.
 - [ ] Docs updated when behaviour/schema/API changed; ADR when deviating.
 - [ ] Hooks pass (`check-frontend-rules`, `check-backend-rules`, `check-secrets`).
+- [ ] CI checks green on the PR — web, API and `SonarCloud Code Analysis` (ADR-0007; the gate is this DoD, `main` has no branch protection).
 
 ## 2. Backend tests (JUnit 5 · Mockito · Testcontainers · ArchUnit)
 
