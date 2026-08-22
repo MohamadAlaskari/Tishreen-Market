@@ -60,6 +60,8 @@ ordering/
 
 Application events (`ApplicationEventPublisher`, synchronous, same transaction unless `@TransactionalEventListener(AFTER_COMMIT)`): `OrderCreated`, `OrderStatusChanged`, `OrderFinalized`, `PaymentRecorded`, `TicketReplied`. Listeners: notification (AFTER_COMMIT), loyalty earn (BEFORE_COMMIT inside same tx), stock sale (same tx).
 
+**Layering inside a module (ArchUnit-enforced, ADR-0005):** `api → application, dto, events` · `application →` everything except `api` · `infrastructure → domain, dto` · `dto`/`events` are plain data carriers · `domain` depends on nothing else in the module. Sole exception: the module's own `api`/`dto`/`events` may reference **domain enums** (e.g. `OrderStatus`) — entities never. Across modules the boundary rule above stays absolute, so an enum needed by another module moves to `dto` or `shared`.
+
 ### Provider abstraction (the "everything abstract" principle)
 ```java
 public interface NotificationChannel { String key(); NotificationResult send(NotificationRequest r); }
