@@ -37,6 +37,7 @@ Skills in `.claude/skills/` condense these; agents in `.claude/agents/` review a
 - Deliver complete runnable code; no `TODO: implement`, no `any`, no `@ts-ignore`, no stray `console.log`/`System.out`.
 - Every list query paginated and indexed. Comments explain *why*.
 - Flag Syria constraints whenever they matter (hosting, CDN, offline driver, payments, messaging).
+- GitHub tickets only via the `ticket` skill (`.claude/skills/ticket/`): dependencies `Blocked by:` / `Blocks:` mirrored on **both** issues, `blocked` label while a blocker is open. After implementing a ticket, deliver the handover from that skill — commit message + `git add`/`git commit` command with the file list, PR title and PR description.
 
 ## Commands
 ```bash
