@@ -1,0 +1,12 @@
+---
+description: Backend rules for api/ (Spring Boot 3.3, Java 21, Maven, PostgreSQL 15, Flyway, JPA, AOP)
+globs: ["api/**"]
+alwaysApply: false
+---
+See `docs/02-data-model.md`, `docs/05-business-rules.md`, `docs/06-api.md`, `docs/09-architecture.md` and `.claude/skills/spring-modular-monolith/SKILL.md`.
+- Packages `com.tishreen.api.<module>.{api,application,domain,infrastructure,dto,events,ports}`; modules `identity catalog ordering delivery loyalty support inventory cms platform shared`; no cross-module `domain`/`infrastructure` imports; provider SDKs only in `platform`.
+- `@PreAuthorize("hasAuthority('PERMISSION_CODE')")` on every controller method; ownership checks → 404; DTO records only.
+- `BusinessException(code)` with codes from `docs/06 §2`; localized messages in `messages_ar.properties`/`messages_en.properties`.
+- Status transitions lock the order row; every ledger write updates its cache in the same transaction; `@Audited` on the mandatory actions.
+- Flyway: additive `V<n>__desc.sql`; never edit committed migrations; `NUMERIC(14,2)`/`(12,3)`, `TIMESTAMPTZ`, `VARCHAR + CHECK`.
+- Tests: JUnit 5 + Mockito unit tests for rules, Testcontainers for integration, ArchUnit for boundaries; run `./mvnw -q verify` before claiming done.

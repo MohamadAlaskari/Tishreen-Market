@@ -1,0 +1,15 @@
+---
+description: Tishreen (مجمع تشرين) project rules — mirror of CLAUDE.md for Cursor's own agent. Claude Code reads CLAUDE.md and .claude/ directly.
+globs: ["**/*"]
+alwaysApply: true
+---
+Read `CLAUDE.md` first; the 14 spec docs in `docs/` are the source of truth; `.claude/skills/*` condense them.
+
+Non-negotiable:
+- RTL first: only logical Tailwind utilities (`ms- me- ps- pe- start- end- text-start text-end rounded-s- rounded-e- border-s border-e`).
+- Colours only via tokens (`bg-primary`, `text-link`, `bg-primary-subtle` …); never `#hex`, `oklch()`, palette classes or `bg-[…]` in components. Links in dark mode use `text-link`.
+- No literal UI strings — i18n keys (`ar.json` default, `en.json`). DB content `*_ar` mandatory, `*_en` optional with fallback in the service layer.
+- `POST /orders` persists before the `wa.me` link is returned. Snapshots in orders; ledgers for points and stock; AOP audit on every sensitive action; providers behind interfaces switched via `settings`.
+- Money `BigDecimal` scale 2 / `NUMERIC(14,2)`; quantities scale 3. No floats. No hard deletes. No secrets in code. No CDNs/Google Fonts/Google Maps.
+- Use table, column, route, status, permission and setting names verbatim from `docs/`; never invent names.
+- Big task → numbered plan, implement step 1, stop for review. Reply in the user's language; identifiers in English.
