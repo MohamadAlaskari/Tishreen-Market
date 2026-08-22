@@ -32,6 +32,8 @@ Entities never leave the service layer — every endpoint speaks DTOs (records).
 | 429 | rate limit (`Retry-After`) |
 | 500 | never leaks stack traces; logged with `correlationId` |
 
+Generic codes for non-business failures (ADR-0003): `VALIDATION_FAILED` (400, also malformed JSON), `NOT_FOUND` (404), `METHOD_NOT_ALLOWED` (405), `INTERNAL_ERROR` (500); unmapped codes fall back to the localized `REQUEST_FAILED` message.
+
 ### Pagination & sorting
 `?page=0&size=20&sort=createdAt,desc` → 
 ```json
