@@ -2,7 +2,7 @@
 
 > Canonical product name: **مجمع تشرين** (the name on every Figma screen and in the knowledge files; English label "Tishreen Mall").
 > Confirmed by Mohamad on 2026-08-22: the 2026-08-20 branding experiments («تشرين مول», slogan, brand mark, emerald primary) were reverted on purpose. Final: **مجمع تشرين**, rose preset, Tajawal text, Tufuli Arabic headings (Baloo Bhaijaan 2 stand-in). See `08`.
-> Internal code name: `tishreen`. Repository root: `tishreen/`.
+> Internal code name: `tishreen`. Working repository: `MohamadAlaskari/Tishreen-Market`, implementation at the repo root (ADR-0001); repo layout in `09 §1`.
 
 ## 1. What we are building
 
@@ -45,20 +45,21 @@ Five user roles share one REST API, one web app (a PWA, including the driver off
 | 11 | `11-syria-constraints.md` | Hosting, CDN, fonts, maps, offline driver, backups |
 | 12 | `12-build-plan.md` | Six phases with task lists and acceptance criteria |
 | 13 | `13-quality.md` | Definition of done, test strategy, review checklists |
+| ADR | `adr/` (index: `adr/README.md`) | Architecture Decision Records — every recorded deviation/decision (template `adr/0000-template.md`), mirrored to the wiki |
 
 Design source: Figma file key `0RLOI0q7lWCK1Rme8JjkKu` (single file, all roles, light+dark, 49 routed screens + map picker).
 
 ## 4. Tech stack (locked)
 
-**Frontend (web)** — TanStack Start (React 19, file-based routes) · TypeScript strict · Tailwind v4 · shadcn/ui (CLI-managed, `--rtl`) · react-i18next · TanStack Query · react-hook-form + zod · Leaflet (bundled, no CDN) · vite-plugin-pwa (driver offline shell — the web app **stays a PWA**) · Turborepo monorepo (`apps/web`, `apps/mobile`, `packages/ui`) · pnpm.
+**Frontend (web)** — TanStack Start (React 19, file-based routes) · TypeScript strict · Tailwind v4 · shadcn/ui (CLI-managed, `--rtl`) · react-i18next · TanStack Query · react-hook-form + zod · Leaflet (bundled, no CDN) · vite-plugin-pwa (driver offline shell — the web app **stays a PWA**) · Turborepo monorepo (`apps/web`, `apps/mobile`, `packages/ui`) · pnpm 10 (pinned via root `packageManager`) · Node 24 (`.nvmrc`; root `engines` requires `>=24`).
 
 **Mobile (native, ADR-0004)** — Expo SDK 57 (React Native 0.86, React 19) · TypeScript strict · i18next + react-i18next (`ar` default, RTL via `expo-localization` `supportsRTL`) · same REST API `/api/v1`, no separate backend · workspace `apps/mobile`; `packages/ui` stays web-only (shadcn/DOM).
 
-**Backend** — Spring Boot 3.3+ (Java 21) · Spring Security (JWT) · Spring Data JPA · PostgreSQL 15 · Flyway · Spring AOP (audit) · Bean Validation · MapStruct (DTO mapping, optional) · springdoc-openapi · Maven (`./mvnw`). Modular Monolith: one package per domain, boundaries enforced by ArchUnit.
+**Backend** — Spring Boot 3.3+ (Java 21) · Spring Security (JWT) · Spring Data JPA · PostgreSQL 15 · Flyway · Spring AOP (audit) · Bean Validation · MapStruct (DTO mapping, optional) · springdoc-openapi · Maven (`./mvnw`). Modular Monolith: one package per domain, boundaries enforced by ArchUnit. Phasing: the Phase-1 skeleton runs on plain `spring-boot-starter-jdbc`; Spring Data JPA entities arrive with Phase 2 (12 P2-T1), MapStruct optionally from then on.
 
 **Tests** — JUnit 5 + Mockito + Testcontainers (backend) · Vitest + Testing Library (frontend) · Playwright for the end-to-end order journey.
 
-**Infra** — Docker Compose for local dev (postgres, optional minio) · VPS outside US-sanction-blocking providers · nginx reverse proxy · nightly `pg_dump`.
+**Infra** — Docker Compose for the local database only: `infra/compose.base.yml` + one overlay `compose.{dev,nearprod,prod}.yml` — three operating modes driven by `tishreen.ps1`, ports per mode in `09 §4`; object storage is `local-disk` today (MinIO/S3 planned, Phase 5+) · VPS outside US-sanction-blocking providers · nginx reverse proxy · nightly `pg_dump`.
 
 ## 5. Glossary (Arabic ↔ code) — use these names verbatim
 

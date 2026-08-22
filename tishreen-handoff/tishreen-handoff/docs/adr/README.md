@@ -1,0 +1,14 @@
+# ADR index — Architecture Decision Records
+
+Every deviation from and decision about the canonical docs (`00`–`13`) is recorded here as
+`NNNN-<slug>.md` (four-digit ascending number; copy [`0000-template.md`](0000-template.md)) —
+see the deviations policy in `12-build-plan.md`. Update the affected doc **in the same PR**,
+add the new ADR to this index, and the `sync-wiki` Action mirrors everything to the wiki on merge.
+
+| # | ADR | Status | Date |
+|---|---|---|---|
+| 0001 | [Implementation lives in the Tishreen-Market repository](0001-implement-in-tishreen-market-repo.md) | accepted | 2026-08-22 |
+| 0002 | [GitHub issue branches off `main` instead of phase/feat hierarchy](0002-github-issue-branches.md) | accepted | 2026-08-22 |
+| 0003 | [Generic error codes for framework-level failures](0003-generic-error-codes.md) | accepted | 2026-08-22 |
+| 0004 | [Add a native mobile app (`apps/mobile`, Expo) alongside the web PWA](0004-add-native-mobile-app-expo.md) | accepted | 2026-08-22 |
+| 0005 | [ArchUnit layer dependency matrix and the domain-enum exception](0005-archunit-layer-matrix-domain-enums.md) | accepted | 2026-08-22 |

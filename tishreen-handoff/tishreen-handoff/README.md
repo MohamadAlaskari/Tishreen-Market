@@ -54,7 +54,7 @@ tishreen-handoff/
 - Keep `docs/` updated as the code evolves — the agents read them, not your memory.
 
 ## Verified on 2026-08-22
-- DDL + seed executed on PostgreSQL 16: 34 tables, 5 roles, 35 permissions, 59 grants, 42 settings, 7 products, 6 users, stock ledger = cache.
+- DDL + seed executed: 34 tables, 5 roles, 35 permissions, 59 grants, 42 settings, 7 products, 6 users, stock ledger = cache. The project's Postgres version is **15** (`infra/compose.base.yml`, docs/02/03); the Flyway smoke tests verify DDL + seed on `postgres:15`.
 - Figma file `0RLOI0q7lWCK1Rme8JjkKu`: 49 route frames found by name and id (docs/07 §10), component sets and Lucide icon set (65 names), text styles, the `tishreen/theme` collection (49 variables, six modes = three presets × light/dark) — all tokens in `docs/08` copied from the live values.
 - Hooks tested against violating and clean sample files (frontend 10 violations detected / clean file passes; backend boundary, money, enum, date, logging, migration and config checks; secrets and `.env` writes blocked).
 

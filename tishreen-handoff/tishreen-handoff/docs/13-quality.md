@@ -31,7 +31,7 @@
 | `ThemeContrastValidatorTest` | each preset passes all four pairs in light and dark; hue rotation that drops a pair below 4.5 → `THEME_CONTRAST_FAILED` with the pair named; invalid preset → `THEME_PRESET_INVALID`; hue outside 0–360 rejected |
 
 ### Integration (Spring context + Postgres Testcontainer)
-- `SchemaMigrationIT`: Flyway applies V1+V2 on empty DB; 34 tables; seed counts.
+- `FlywayDevMigrationSmokeTest` / `FlywayProdMigrationSmokeTest`: Flyway migrates a fresh Postgres 15 container — dev profile applies V1+V2+V900 (34 tables, core-seed and dev-sample counts); prod profile applies V1+V2 only (no dev seed).
 - `AuthFlowIT`: register → login → refresh rotation → blocked user rejected.
 - `OrderJourneyIT`: create (assert DB row before WhatsApp URL returned) → confirm → weigh → finalize → ready → picked-up: history rows, stock movements, payment, points earn.
 - `DeliveryJourneyIT`: dispatch → failed → retry → delivered with idempotent replay.
@@ -50,7 +50,7 @@
 - Unit: `formatMoney/formatQty/formatDate`, cart store (add/merge/step/limits/persistence/version migration), `describeConditions()`, offline queue (enqueue/replay order/dedupe by key), guards.
 - Component: `QtyStepper` (KG/PIECE), `OtpInput` (paste, RTL digits), `StatusTimeline`, `ProductCard` (unavailable state), checkout summary renders server numbers only.
 - RTL snapshot: render key screens with `dir=rtl` and `dir=ltr`, assert no physical-direction classes (`toHaveNoPhysicalDirectionClasses` custom matcher).
-- E2E (Playwright, against docker-compose): customer journey (Phase 4), driver offline replay (Phase 5, using `context.setOffline`), staff OTP desk.
+- E2E (Playwright, against the local dev stack — `tishreen.ps1 -Mode dev`, `09 §4`): customer journey (Phase 4), driver offline replay (Phase 5, using `context.setOffline`), staff OTP desk.
 
 ## 4. Review checklists
 
