@@ -49,12 +49,13 @@ tishreen-handoff/
 
 `.\tishreen.ps1` in the repo root is a menu-driven control script for the local dev stack from `docs/09-architecture.md` §4 (runs unchanged on Windows PowerShell 5.1 and PowerShell 7):
 
-- operating modes `dev` / `nearprod` / `prod` (preselect with `-Mode`, switch with `b` in the menu): `dev` runs API and web from source (`mvnw spring-boot:run`, Vite dev server), `nearprod` runs the built jar and the built frontend (`vite preview`) still on Spring profile `dev` (delivery check), `prod` runs the jar with profile `prod` — no Swagger, no dev seed, fail-fast without real configuration. Per-mode ports (API/web): 8080/3000, 8180/3100, 8280/3200. Unlike the eportfolio model there is ONE shared Docker database — the target deployment is nginx + systemd (docs/09 §5), not containers.
+- menu and structure follow the proven `eportfolio.ps1` pattern (sections Starten und bauen / Beobachten / Arbeiten / Aufraeumen, command echo, address list after start), mapped onto the Tishreen stack.
+- operating modes `dev` / `nearprod` / `prod` (preselect with `-Mode`, switch with `b` in the menu): `dev` runs API and web from source (`mvnw spring-boot:run`, Vite dev server), `nearprod` runs the built jar and the built frontend (`vite preview`) still on Spring profile `dev` (delivery check), `prod` runs the jar with profile `prod` — no Swagger, no dev seed, fail-fast without real configuration. Per-mode ports (API/web): 8080/3000, 8180/3100, 8280/3200, overridable via `infra/.env` (`DEV_API_PORT`, `NEARPROD_WEB_PORT`, …). Unlike the eportfolio model there is ONE shared Docker database — the target deployment is nginx + systemd (docs/09 §5), not containers.
 - checks every prerequisite up front (Docker daemon, Compose v2, `infra/.env`, Node, pnpm, JDK) and names what is missing instead of failing later with raw Compose/Maven errors; offers to start Docker Desktop. `.\tishreen.ps1 -Check` runs only this check (non-interactive, exit code 0/1).
 - database: start (waits until `pg_isready` is green), stop, status, follow logs (Ctrl+C only ends the view, not the container), `psql` shell, full removal including the `tishreen-pgdata` volume (guarded by an explicit confirmation).
 - API: start per mode in a new window; build the delivery artifacts (`mvnw -DskipTests package` + `pnpm build`); `mvnw verify`.
-- web: start per mode in a new window; `lint`/`typecheck` via Turbo; optional Expo start for `apps/mobile`.
-- health check: Postgres (`pg_isready`), API (`/actuator/health`) and web on the current mode's ports via `curl.exe` (a 4xx answer counts as alive).
+- web: start per mode in a new window; web tests (`pnpm test`, Vitest), `lint`/`typecheck`/`format` via Turbo; optional Expo start for `apps/mobile`.
+- health check: Postgres (`pg_isready`), UI, API health and OpenAPI document on the current mode's ports via `curl.exe` (a 4xx answer counts as alive) — for one mode or all three at once.
 
 Ports and credentials are read from `infra/.env` (fallback: the defaults in `infra/docker-compose.yml`); secrets are never printed.
 

@@ -1,615 +1,729 @@
-#Requires -Version 5.1
-<#
-tishreen.ps1 - Menu-driven control script for the local dev stack (issue #11).
+# Tishreen Mall: Steuerung des lokalen Dev-Stacks.
+#
+# Aufruf ohne Parameter oeffnet das Menue:
+#   .\tishreen.ps1
+# Mit vorgewaehlter Betriebsart:
+#   .\tishreen.ps1 -Mode nearprod
+# Nur die Voraussetzungen pruefen (nicht-interaktiv, Exit-Code 0/1):
+#   .\tishreen.ps1 -Check
+#
+# Der Text ist bewusst frei von Umlauten: Windows PowerShell 5.1 liest eine
+# UTF-8-Datei ohne BOM als ANSI und wuerde sie zerlegen.
+#
+# Drei Betriebsarten nach dem Vorbild von eportfolio.ps1 - aber an die
+# Tishreen-Architektur angepasst: API und Web laufen auf dem Host (docs/09
+# Abschnitt 4), Docker dient nur der Datenbank, und das Ziel-Deployment ist
+# nginx + systemd (docs/09 Abschnitt 5), nicht Container. Die Betriebsarten
+# unterscheiden sich also darin, WIE API und Web laufen. Sie haben eigene
+# Ports und koennen nebeneinander laufen; sie teilen sich die EINE Datenbank
+# aus infra/docker-compose.yml.
+#
+#   DEV       Quellcode-Betrieb: mvnw spring-boot:run, Vite-Dev-Server.
+#             Profil dev. Zum Entwickeln.
+#   NEARPROD  Gebautes Jar, gebautes Frontend (vite preview).
+#             Profil dev. Prueft den Auslieferungsstand, nicht die
+#             Produktivkonfiguration.
+#   PROD      Dasselbe Jar, aber Profil prod: kein Swagger, kein Dev-Seed.
+#             Laeuft nur mit echten Werten (DB_URL auf eine saubere
+#             Datenbank); ohne sie beendet sich die API absichtlich.
 
-Drives the three parts of docs/09-architecture.md section 4 from one place:
-  - PostgreSQL in Docker  (infra/docker-compose.yml - Docker is used for the DB only)
-  - API on the host       (Spring Boot, profile per operating mode)
-  - Web on the host       (Vite dev server or built preview, per operating mode)
-
-Three operating modes ("Betriebsarten"), modeled on eportfolio.ps1 but adapted
-to the Tishreen architecture: the target deployment is nginx + systemd
-(docs/09 section 5), not containers, so the modes differ in HOW the api and
-the web app run on the host - the Docker database stays ONE shared instance.
-
-  DEV       Source run: mvnw spring-boot:run (profile dev), Vite dev server.
-            Hot reload; for daily development.
-  NEARPROD  Delivery check: built jar + built frontend (vite preview), but
-            still profile dev (dev seed V900, Swagger on). Checks the
-            artifact, not the production configuration.
-  PROD      Built jar with profile prod: no Swagger, no dev seed. Needs a
-            clean database (DB_URL/DB_USER/DB_PASSWORD) and real settings;
-            without them the API stops on purpose (fail fast).
-
-Usage:
-  .\tishreen.ps1                 interactive menu (mode DEV preselected)
-  .\tishreen.ps1 -Mode nearprod  interactive menu with a preselected mode
-  .\tishreen.ps1 -Check          prerequisites check only (non-interactive)
-
-Runs unchanged on Windows PowerShell 5.1 and PowerShell 7. The script text is
-deliberately ASCII-only: PS 5.1 reads UTF-8 without BOM as ANSI and would
-garble anything else. DB port and credentials come from infra/.env (fallback:
-the defaults in infra/docker-compose.yml); secrets are never printed.
-#>
 [CmdletBinding()]
 param(
-    # Operating mode preselection; can be changed in the menu with 'b'.
-    [ValidateSet('dev', 'nearprod', 'prod')]
-    [string]$Mode = 'dev',
-    # Only run the prerequisites check and exit (safe to call non-interactively).
-    [switch]$Check
+	[ValidateSet('dev', 'nearprod', 'prod')]
+	[string]$Mode = 'dev',
+	[switch]$Check
 )
 
-Set-StrictMode -Version 3.0
-$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version 2.0
+Set-Location -Path $PSScriptRoot
 
-# ---------------------------------------------------------------- locations --
-$RepoRoot    = $PSScriptRoot
-$ComposeFile = Join-Path $RepoRoot 'infra\docker-compose.yml'
-$EnvFile     = Join-Path $RepoRoot 'infra\.env'
-$ApiDir      = Join-Path $RepoRoot 'api'
-$WebDir      = Join-Path $RepoRoot 'apps\web'
-$MobileDir   = Join-Path $RepoRoot 'apps\mobile'
+$ComposeFile = 'infra\docker-compose.yml'
+$EnvFile     = 'infra\.env'
 
-# Common prefix for every docker compose call.
-$Compose = @('compose', '-f', $ComposeFile, '--env-file', $EnvFile)
-
-# ------------------------------------------------------------------- modes --
-# DEV ports are fixed by the project config (application.yml server.port 8080,
-# apps/web "dev": "vite dev --port 3000"). NEARPROD and PROD get their own
-# ports so they can run next to a DEV session; the API port is passed via
-# --server.port, the web preview via --port.
 $Modes = [ordered]@{
-    'dev' = @{
-        Label   = 'DEV / Quellcode-Betrieb'
-        Profil  = 'dev'
-        ApiPort = 8080
-        WebPort = 3000
-        Hinweis = 'mvnw spring-boot:run und Vite-Dev-Server mit Hot Reload. Zum Entwickeln.'
-    }
-    'nearprod' = @{
-        Label   = 'NEARPROD / Auslieferungsstand'
-        Profil  = 'dev'
-        ApiPort = 8180
-        WebPort = 3100
-        Hinweis = 'Gebautes Jar und gebautes Frontend (vite preview), aber weiterhin Profil dev: Dev-Seed, Swagger an. Prueft den Auslieferungsstand, nicht die Produktivkonfiguration.'
-    }
-    'prod' = @{
-        Label   = 'PROD / Produktivkonfiguration'
-        Profil  = 'prod'
-        ApiPort = 8280
-        WebPort = 3200
-        Hinweis = 'Gebautes Jar mit Profil prod: kein Swagger, kein Dev-Seed. Braucht eine saubere Datenbank (DB_URL/DB_USER/DB_PASSWORD) und echte Werte - ohne sie beendet sich die API absichtlich (Fail-Fast). Ziel-Deployment laut docs/09 Abschnitt 5: nginx + systemd.'
-    }
+	'dev' = @{
+		Label      = 'DEV / Quellcode-Betrieb'
+		Profil     = 'dev'
+		ApiVar     = 'DEV_API_PORT'
+		ApiDefault = '8080'
+		WebVar     = 'DEV_WEB_PORT'
+		WebDefault = '3000'
+		Hinweis    = 'Hot Reload: mvnw spring-boot:run und Vite-Dev-Server direkt auf dem Quellcode. Erster Start laedt Maven-Abhaengigkeiten, das dauert.'
+	}
+	'nearprod' = @{
+		Label      = 'NEARPROD / Auslieferungsstand'
+		Profil     = 'dev'
+		ApiVar     = 'NEARPROD_API_PORT'
+		ApiDefault = '8180'
+		WebVar     = 'NEARPROD_WEB_PORT'
+		WebDefault = '3100'
+		Hinweis    = 'Gebautes Jar und gebautes Frontend (vite preview), aber weiterhin Profil dev: Dev-Seed, Swagger an. Prueft den Auslieferungsstand, nicht die Produktivkonfiguration.'
+	}
+	'prod' = @{
+		Label      = 'PROD / Produktivkonfiguration'
+		Profil     = 'prod'
+		ApiVar     = 'PROD_API_PORT'
+		ApiDefault = '8280'
+		WebVar     = 'PROD_WEB_PORT'
+		WebDefault = '3200'
+		Hinweis    = 'Dasselbe Jar, aber Profil prod: kein Swagger, kein Dev-Seed. Braucht echte Werte (DB_URL auf eine saubere Datenbank); ohne sie beendet sich die API absichtlich.'
+	}
 }
 
 $script:Mode = $Mode
+$script:LastDockerExit = 0
 
-function Get-ModeConfig { return $Modes[$script:Mode] }
+# --------------------------------------------------------------------------
+# Hilfsfunktionen
+# --------------------------------------------------------------------------
 
-# ------------------------------------------------------------------ helpers --
-function Write-Ok   { param([string]$Text) Write-Host "  [OK]     $Text" -ForegroundColor Green }
-function Write-Err  { param([string]$Text) Write-Host "  [FEHLER] $Text" -ForegroundColor Red }
-function Write-Warn { param([string]$Text) Write-Host "  [WARN]   $Text" -ForegroundColor Yellow }
+function Get-Mode { return $Modes[$script:Mode] }
 
-function Wait-Enter { [void](Read-Host 'Weiter mit Enter') }
+# Alle Compose-Aufrufe nennen Datei und Env-Datei ausdruecklich. "docker
+# compose up" ohne -f scheitert mit "no configuration file provided"; das
+# ist Absicht.
+function Get-ComposeArgs {
+	return @('-f', $ComposeFile, '--env-file', $EnvFile)
+}
 
-# Runs a native command silently; returns $true when its exit code is 0.
-# Stderr is redirected under a temporary ErrorActionPreference=Continue: PS 5.1
-# turns redirected stderr lines into ErrorRecords, which would throw under Stop.
+function Write-Head {
+	param([string]$Text)
+	Write-Host ''
+	Write-Host $Text -ForegroundColor Cyan
+	Write-Host ('-' * $Text.Length) -ForegroundColor DarkGray
+}
+
+function Invoke-Docker {
+	param([string[]]$Arguments)
+	Write-Host ''
+	Write-Host "> docker $($Arguments -join ' ')" -ForegroundColor DarkGray
+	# Kein Pipe und keine Umleitung: "compose exec" braucht die Konsole
+	# unveraendert, sonst gibt es kein Terminal und kein Strg+C.
+	& docker @Arguments
+	$script:LastDockerExit = $LASTEXITCODE
+	if ($script:LastDockerExit -ne 0) {
+		Write-Host ''
+		Write-Host "Docker meldet Exit-Code $($script:LastDockerExit)." -ForegroundColor Red
+	}
+}
+
+function Invoke-Compose {
+	param([string[]]$Arguments)
+	Invoke-Docker ((@('compose') + (Get-ComposeArgs)) + $Arguments)
+}
+
+# Wie Invoke-Docker, nur ohne jede Ausgabe; liefert $true bei Exit-Code 0.
+# Fuer Sonden (Daemon da? Postgres bereit?), deren Fehlermeldungen nur
+# Rauschen waeren.
 function Invoke-Quiet {
-    param([string]$File, [string[]]$ArgumentList)
-    $eap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        & $File @ArgumentList *> $null
-        return ($LASTEXITCODE -eq 0)
-    } catch {
-        return $false
-    } finally {
-        $ErrorActionPreference = $eap
-    }
+	param([string]$File, [string[]]$Arguments)
+	try {
+		& $File @Arguments *> $null
+		return ($LASTEXITCODE -eq 0)
+	} catch {
+		return $false
+	}
 }
 
-# Quotes arguments for Start-Process -ArgumentList (paths may contain spaces).
-function ConvertTo-ArgLine {
-    param([string[]]$Items)
-    $quoted = foreach ($item in $Items) {
-        if ($item -match '[\s"]') { '"' + ($item -replace '"', '\"') + '"' } else { $item }
-    }
-    return ($quoted -join ' ')
+function Confirm-Action {
+	param([string]$Message)
+	Write-Host ''
+	Write-Host $Message -ForegroundColor Yellow
+	$answer = Read-Host 'Wirklich ausfuehren? [j/N]'
+	return ($answer -eq 'j' -or $answer -eq 'J')
 }
 
-# infra/.env -> hashtable (KEY=VALUE lines; comments and blanks ignored).
-function Read-DotEnv {
-    param([string]$Path)
-    $map = @{}
-    if (Test-Path -LiteralPath $Path) {
-        foreach ($line in Get-Content -LiteralPath $Path) {
-            $t = "$line".TrimStart([char]0xFEFF).Trim()
-            if ($t -eq '' -or $t.StartsWith('#')) { continue }
-            $i = $t.IndexOf('=')
-            if ($i -lt 1) { continue }
-            $map[$t.Substring(0, $i).Trim()] = $t.Substring($i + 1).Trim()
-        }
-    }
-    return $map
+# Liest einen Wert aus infra/.env. Sie ist die einzige Quelle der Ports und
+# Zugangsdaten und wird nicht eingecheckt; die Defaults spiegeln die
+# Compose-Datei. POSTGRES_PASSWORD wird nirgends gelesen oder angezeigt.
+function Get-EnvValue {
+	param([string]$Name, [string]$Default)
+	$envPath = Join-Path $PSScriptRoot $EnvFile
+	if (Test-Path $envPath) {
+		foreach ($line in Get-Content -Path $envPath) {
+			if ($line -match "^\s*$([regex]::Escape($Name))\s*=\s*(.*)$") {
+				$value = $Matches[1].Trim()
+				if ($value -ne '') { return $value }
+			}
+		}
+	}
+	return $Default
 }
 
-# DB name/user/port from infra/.env; the fallbacks mirror the defaults in
-# infra/docker-compose.yml. POSTGRES_PASSWORD is deliberately never read:
-# the script does not need it and must never print it.
-function Get-DbConfig {
-    $vars = Read-DotEnv -Path $EnvFile
-    $cfg = @{ Db = 'tishreen'; User = 'tishreen'; Port = '5432' }
-    if ($vars.ContainsKey('POSTGRES_DB'))   { $cfg.Db   = $vars['POSTGRES_DB'] }
-    if ($vars.ContainsKey('POSTGRES_USER')) { $cfg.User = $vars['POSTGRES_USER'] }
-    if ($vars.ContainsKey('POSTGRES_PORT')) { $cfg.Port = $vars['POSTGRES_PORT'] }
-    return $cfg
+function Get-ApiPort {
+	$m = Get-Mode
+	return Get-EnvValue -Name $m['ApiVar'] -Default $m['ApiDefault']
 }
 
-function Test-TcpPort {
-    param([int]$Port)
-    $client = New-Object System.Net.Sockets.TcpClient
-    try {
-        $iar = $client.BeginConnect('127.0.0.1', $Port, $null, $null)
-        if (-not $iar.AsyncWaitHandle.WaitOne(3000)) { return $false }
-        $client.EndConnect($iar)
-        return $true
-    } catch {
-        return $false
-    } finally {
-        $client.Close()
-    }
+function Get-WebPort {
+	$m = Get-Mode
+	return Get-EnvValue -Name $m['WebVar'] -Default $m['WebDefault']
 }
 
-# HTTP status of $Url. Deliberately curl.exe, not Invoke-WebRequest: the .NET
-# web stack runs into timeouts against the Vite dev server and reports false
-# alarms. Returns the status code, -1 for "port open" (TCP fallback when
-# curl.exe is missing) or $null for unreachable.
-function Get-HttpStatus {
-    param([string]$Url, [int]$Port)
-    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
-    if ($null -ne $curl) {
-        $eap = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try {
-            $code = [string](& $curl.Source --silent --output NUL --write-out '%{http_code}' --max-time 5 $Url 2> $null)
-        } catch {
-            $code = ''
-        } finally {
-            $ErrorActionPreference = $eap
-        }
-        if ($code -match '^[0-9]{3}$' -and $code -ne '000') { return [int]$code }
-        return $null
-    }
-    if (Test-TcpPort -Port $Port) { return -1 }
-    return $null
+function Get-DbUser { return Get-EnvValue -Name 'POSTGRES_USER' -Default 'tishreen' }
+function Get-DbName { return Get-EnvValue -Name 'POSTGRES_DB' -Default 'tishreen' }
+function Get-DbPort { return Get-EnvValue -Name 'POSTGRES_PORT' -Default '5432' }
+
+# Geprueft wird mit curl.exe, nicht mit Invoke-WebRequest. Grund: gegen den
+# Vite-Dev-Server laeuft der .NET-Webstack in einen Timeout, waehrend curl.exe
+# im selben Prozess HTTP 200 bekommt. Invoke-WebRequest meldete also "nicht
+# erreichbar" fuer eine laufende Oberflaeche, und ein Fehlalarm ist schlimmer
+# als keine Pruefung. curl.exe liegt seit Windows 10 1803 im System; fehlt es
+# doch, faellt die Funktion zurueck.
+function Test-Endpoint {
+	param([string]$Label, [string]$Url)
+
+	$status = $null
+	if ($null -ne (Get-Command curl.exe -ErrorAction SilentlyContinue)) {
+		$code = & curl.exe -s -o NUL -m 5 -w '%{http_code}' $Url
+		# curl liefert 000, wenn gar keine Antwort kam.
+		if ($LASTEXITCODE -eq 0 -and $code -ne '000') { $status = [int]$code }
+	} else {
+		try {
+			$status = [int](Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 5).StatusCode
+		} catch {
+			$webException = $_.Exception -as [System.Net.WebException]
+			if ($null -ne $webException -and $null -ne $webException.Response) {
+				$status = [int]$webException.Response.StatusCode
+			}
+		}
+	}
+
+	if ($null -eq $status) {
+		Write-Host ("  {0,-30} nicht erreichbar" -f $Label) -ForegroundColor Red
+	} elseif ($status -ge 200 -and $status -lt 400) {
+		Write-Host ("  {0,-30} HTTP {1}" -f $Label, $status) -ForegroundColor Green
+	} else {
+		# Ein 4xx ist eine Antwort und damit ein Lebenszeichen, kein Ausfall.
+		Write-Host ("  {0,-30} HTTP {1}" -f $Label, $status) -ForegroundColor Yellow
+	}
 }
 
-# Newest Spring Boot jar in api/target (repackaged fat jar; .original and
-# sources jars are skipped). $null when nothing has been built yet.
-function Find-ApiJar {
-    $targetDir = Join-Path $ApiDir 'target'
-    if (-not (Test-Path -LiteralPath $targetDir)) { return $null }
-    $jars = @(Get-ChildItem -LiteralPath $targetDir -Filter '*.jar' |
-        Where-Object { $_.Name -notlike '*-sources.jar' -and $_.Name -notlike '*-javadoc.jar' } |
-        Sort-Object -Property LastWriteTime -Descending)
-    if ($jars.Count -eq 0) { return $null }
-    return $jars[0]
-}
-
-# ------------------------------------------------------------- prerequisites --
-
-# Offers to start Docker Desktop and waits for the daemon (manual start is the
-# normal case on this machine). Returns $true once the daemon answers.
+# Bietet an, Docker Desktop zu starten, und wartet auf den Daemon. Auf dieser
+# Maschine startet Docker Desktop nicht automatisch.
 function Request-DockerDesktopStart {
-    $exe = Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe'
-    if (-not (Test-Path -LiteralPath $exe)) { return $false }
-    Write-Host ''
-    Write-Host 'Der Docker-Daemon ist nicht erreichbar, Docker Desktop ist aber installiert.'
-    $answer = Read-Host 'Docker Desktop jetzt starten? [j/n]'
-    if ($answer -ne 'j') { return $false }
-    Start-Process -FilePath $exe
-    Write-Host 'Warte auf den Docker-Daemon (bis zu 90 Sekunden) ...'
-    for ($i = 0; $i -lt 30; $i++) {
-        Start-Sleep -Seconds 3
-        if (Invoke-Quiet 'docker' @('info')) {
-            Write-Ok 'Docker-Daemon erreichbar.'
-            return $true
-        }
-    }
-    return $false
+	$exe = Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe'
+	if (-not (Test-Path $exe)) { return $false }
+	Write-Host ''
+	Write-Host 'Docker Desktop ist installiert, der Daemon antwortet aber nicht.'
+	$answer = Read-Host 'Docker Desktop jetzt starten? [j/N]'
+	if ($answer -ne 'j' -and $answer -ne 'J') { return $false }
+	Start-Process -FilePath $exe
+	Write-Host 'Warte auf den Docker-Daemon (bis zu 90 Sekunden) ...'
+	for ($i = 0; $i -lt 30; $i++) {
+		Start-Sleep -Seconds 3
+		if (Invoke-Quiet 'docker' @('info')) {
+			Write-Host 'Docker-Daemon erreichbar.' -ForegroundColor Green
+			return $true
+		}
+	}
+	return $false
 }
 
-# Collects every missing prerequisite as its own clear message - instead of
-# letting compose or maven fail later with raw errors.
-function Test-Prerequisites {
-    param([switch]$OfferDockerStart)
-    $problems = @()
+# Prueft die Voraussetzungen. Jede fehlende Voraussetzung bekommt ihre eigene
+# klare Meldung; sonst kosten diese Fehler spaeter eine schwer lesbare Meldung
+# aus Compose oder Maven.
+function Test-Voraussetzungen {
+	param([switch]$OfferDockerStart)
 
-    if (-not (Test-Path -LiteralPath $ComposeFile)) {
-        $problems += "Compose-Datei fehlt: $ComposeFile - Repository unvollstaendig?"
-    }
-    if (-not (Test-Path -LiteralPath $EnvFile)) {
-        $problems += 'infra\.env fehlt. Vorlage kopieren:  Copy-Item infra\.env.example infra\.env'
-    }
+	if ($null -eq (Get-Command docker -ErrorAction SilentlyContinue)) {
+		Write-Host 'Docker ist nicht installiert oder nicht im PATH.' -ForegroundColor Red
+		return $false
+	}
 
-    if ($null -eq (Get-Command docker -ErrorAction SilentlyContinue)) {
-        $problems += 'docker ist nicht im PATH. Docker Desktop installieren (https://docs.docker.com/desktop/).'
-    } else {
-        if (-not (Invoke-Quiet 'docker' @('compose', 'version'))) {
-            $problems += 'Docker Compose v2 fehlt ("docker compose version" schlaegt fehl). Docker Desktop aktualisieren.'
-        }
-        $daemonUp = Invoke-Quiet 'docker' @('info')
-        if (-not $daemonUp -and $OfferDockerStart) {
-            $daemonUp = Request-DockerDesktopStart
-        }
-        if (-not $daemonUp) {
-            $problems += 'Der Docker-Daemon ist nicht erreichbar. Docker Desktop starten und das Skript erneut aufrufen.'
-        }
-    }
+	$ok = $true
 
-    if ($null -eq (Get-Command node -ErrorAction SilentlyContinue)) {
-        $problems += 'node ist nicht im PATH. Node.js 20+ installieren (https://nodejs.org).'
-    }
-    if ($null -eq (Get-Command pnpm -ErrorAction SilentlyContinue)) {
-        $problems += 'pnpm ist nicht im PATH. Aktivieren mit: corepack enable  (oder: npm install -g pnpm)'
-    }
-    $java = Get-Command java -ErrorAction SilentlyContinue
-    if ($null -eq $java -and [string]::IsNullOrEmpty($env:JAVA_HOME)) {
-        $problems += 'Kein JDK gefunden (java nicht im PATH, JAVA_HOME nicht gesetzt). JDK 21+ installieren.'
-    }
+	$daemonUp = Invoke-Quiet 'docker' @('info')
+	if (-not $daemonUp -and $OfferDockerStart) {
+		$daemonUp = Request-DockerDesktopStart
+	}
+	if (-not $daemonUp) {
+		Write-Host 'Docker antwortet nicht. Laeuft Docker Desktop?' -ForegroundColor Red
+		$ok = $false
+	}
 
-    return $problems
+	if (-not (Invoke-Quiet 'docker' @('compose', 'version'))) {
+		Write-Host 'Docker Compose v2 fehlt (docker compose version schlaegt fehl).' -ForegroundColor Red
+		$ok = $false
+	}
+
+	if (-not (Test-Path (Join-Path $PSScriptRoot $ComposeFile))) {
+		Write-Host "Es fehlt $ComposeFile." -ForegroundColor Red
+		$ok = $false
+	}
+
+	if (-not (Test-Path (Join-Path $PSScriptRoot $EnvFile))) {
+		Write-Host 'Es gibt keine infra\.env. Anlegen mit: Copy-Item infra\.env.example infra\.env' -ForegroundColor Red
+		$ok = $false
+	}
+
+	if ($null -eq (Get-Command node -ErrorAction SilentlyContinue)) {
+		Write-Host 'node ist nicht im PATH. Node.js 20+ installieren (https://nodejs.org).' -ForegroundColor Red
+		$ok = $false
+	}
+
+	if ($null -eq (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+		Write-Host 'pnpm ist nicht im PATH. Aktivieren mit: corepack enable' -ForegroundColor Red
+		$ok = $false
+	}
+
+	$java = Get-Command java -ErrorAction SilentlyContinue
+	if ($null -eq $java -and [string]::IsNullOrEmpty($env:JAVA_HOME)) {
+		Write-Host 'Kein JDK gefunden (java nicht im PATH, JAVA_HOME nicht gesetzt). JDK 21+ installieren.' -ForegroundColor Red
+		$ok = $false
+	}
+
+	return $ok
 }
 
-# ----------------------------------------------------------------- database --
-# ONE shared database for all operating modes (unlike the eportfolio model,
-# which has one compose project per mode).
-
-function Start-Db {
-    $cfg = Get-DbConfig
-    Write-Host 'Starte die Datenbank ...'
-    & docker @Compose up -d
-    if ($LASTEXITCODE -ne 0) {
-        Write-Err 'docker compose up ist fehlgeschlagen (Meldung siehe oben).'
-        return
-    }
-    Write-Host ('Warte auf Postgres (127.0.0.1:{0}) ...' -f $cfg.Port)
-    for ($i = 0; $i -lt 15; $i++) {
-        if (Invoke-Quiet 'docker' ($Compose + @('exec', '-T', 'postgres', 'pg_isready', '-U', $cfg.User, '-d', $cfg.Db))) {
-            Write-Ok 'Postgres nimmt Verbindungen an.'
-            return
-        }
-        Start-Sleep -Seconds 2
-    }
-    Write-Warn 'Postgres meldet sich nach 30 Sekunden nicht bereit - Logs pruefen (Menuepunkt 4).'
+# Neuestes Spring-Boot-Jar in api\target (das .jar.original und Hilfs-Jars
+# zaehlen nicht). $null, wenn noch nichts gebaut wurde.
+function Find-ApiJar {
+	$targetDir = Join-Path $PSScriptRoot 'api\target'
+	if (-not (Test-Path $targetDir)) { return $null }
+	$jars = @(Get-ChildItem -Path $targetDir -Filter '*.jar' |
+		Where-Object { $_.Name -notlike '*-sources.jar' -and $_.Name -notlike '*-javadoc.jar' } |
+		Sort-Object -Property LastWriteTime -Descending)
+	if ($jars.Count -eq 0) { return $null }
+	return $jars[0]
 }
 
-function Stop-Db {
-    Write-Host 'Stoppe die Datenbank (Daten bleiben im Volume erhalten) ...'
-    & docker @Compose stop
-    if ($LASTEXITCODE -eq 0) { Write-Ok 'Datenbank gestoppt.' } else { Write-Err 'Stoppen fehlgeschlagen (Meldung siehe oben).' }
+function Show-Adressen {
+	$webPort = Get-WebPort
+	$apiPort = Get-ApiPort
+	$m = Get-Mode
+	Write-Host ''
+	Write-Host "Erreichbar unter ($($m['Label'])):" -ForegroundColor Cyan
+	Write-Host "  Oberflaeche   http://localhost:$webPort"
+	Write-Host "  API           http://localhost:$apiPort/api/v1"
+	if ($m['Profil'] -eq 'dev') {
+		Write-Host "  Swagger-UI    http://localhost:$apiPort/swagger-ui.html"
+		Write-Host "  OpenAPI       http://localhost:$apiPort/api/v1/docs"
+	} else {
+		Write-Host "  Swagger-UI    im Profil prod abgeschaltet"
+	}
+	Write-Host "  Health        http://localhost:$apiPort/actuator/health"
+	Write-Host "  Postgres      127.0.0.1:$(Get-DbPort)  (eine Datenbank fuer alle Betriebsarten)"
 }
 
-function Show-DbStatus {
-    & docker @Compose ps
+# --------------------------------------------------------------------------
+# Aktionen
+# --------------------------------------------------------------------------
+
+function Select-Betriebsart {
+	Write-Head 'Betriebsart waehlen'
+	$keys = @($Modes.Keys)
+	for ($i = 0; $i -lt $keys.Count; $i++) {
+		$m = $Modes[$keys[$i]]
+		$api = Get-EnvValue -Name $m['ApiVar'] -Default $m['ApiDefault']
+		$web = Get-EnvValue -Name $m['WebVar'] -Default $m['WebDefault']
+		Write-Host ("  {0}  {1,-34} Profil {2}, API {3}, Web {4}" -f ($i + 1), $m['Label'], $m['Profil'], $api, $web)
+	}
+	$answer = Read-Host 'Nummer'
+	$index = 0
+	if ([int]::TryParse($answer, [ref]$index) -and $index -ge 1 -and $index -le $keys.Count) {
+		$script:Mode = $keys[$index - 1]
+		Write-Host ''
+		Write-Host "Betriebsart ist jetzt $((Get-Mode)['Label'])." -ForegroundColor Green
+	} else {
+		Write-Host 'Unveraendert.' -ForegroundColor DarkGray
+	}
 }
 
-# Follows the DB logs. Ctrl+C ends ONLY this view: while the log client runs,
-# Ctrl+C is read as a plain key press (TreatControlCAsInput), then the client
-# process tree is stopped. The container keeps running; the menu returns.
-function Watch-DbLogs {
-    Write-Host 'Folge den Postgres-Logs - Strg+C beendet nur die Anzeige, der Container laeuft weiter.' -ForegroundColor Yellow
-    $prev = [Console]::TreatControlCAsInput
-    [Console]::TreatControlCAsInput = $true
-    $proc = $null
-    try {
-        $argLine = ConvertTo-ArgLine -Items ($Compose + @('logs', '--follow', '--tail=200', 'postgres'))
-        $proc = Start-Process -FilePath 'docker' -ArgumentList $argLine -NoNewWindow -PassThru
-        while (-not $proc.HasExited) {
-            if ([Console]::KeyAvailable) {
-                $key = [Console]::ReadKey($true)
-                $ctrl = (($key.Modifiers -band [ConsoleModifiers]::Control) -ne 0)
-                if ($ctrl -and $key.Key -eq [ConsoleKey]::C) { break }
-            }
-            Start-Sleep -Milliseconds 200
-        }
-    } finally {
-        if ($null -ne $proc -and -not $proc.HasExited) {
-            # docker.exe spawns the compose plugin as a child - stop the tree.
-            [void](Invoke-Quiet 'taskkill.exe' @('/PID', "$($proc.Id)", '/T', '/F'))
-        }
-        [Console]::TreatControlCAsInput = $prev
-    }
-    Write-Host ''
-    Write-Host 'Log-Anzeige beendet - der Container laeuft weiter.'
+function Start-Datenbank {
+	Invoke-Compose @('up', '-d')
+	if ($script:LastDockerExit -ne 0) { return }
+	Write-Host ''
+	Write-Host "Warte auf Postgres (127.0.0.1:$(Get-DbPort)) ..." -ForegroundColor DarkGray
+	for ($i = 0; $i -lt 15; $i++) {
+		if (Invoke-Quiet 'docker' ((@('compose') + (Get-ComposeArgs)) + @('exec', '-T', 'postgres', 'pg_isready', '-U', (Get-DbUser), '-d', (Get-DbName)))) {
+			Write-Host 'Postgres nimmt Verbindungen an.' -ForegroundColor Green
+			return
+		}
+		Start-Sleep -Seconds 2
+	}
+	Write-Host 'Postgres meldet sich nicht bereit. Logs pruefen (Menuepunkt 9).' -ForegroundColor Yellow
 }
 
-function Open-DbShell {
-    $cfg = Get-DbConfig
-    Write-Host ('Oeffne psql als "{0}" in Datenbank "{1}" - verlassen mit \q' -f $cfg.User, $cfg.Db)
-    # Interactive, no pipe/redirect: psql needs the terminal, Ctrl+C cancels queries.
-    & docker @Compose exec postgres psql -U $cfg.User -d $cfg.Db
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warn 'psql hat sich mit Fehler beendet - laeuft der Container? (Menuepunkte 1 und 3)'
-    }
-}
+# Baut die Artefakte fuer NEARPROD und PROD: das Spring-Boot-Jar und den
+# Web-Produktionsbuild. DEV arbeitet direkt auf dem Quellcode.
+function Invoke-ArtefakteBauen {
+	param([switch]$Clean)
 
-function Remove-Db {
-    Write-Host ''
-    Write-Host 'WARNUNG: Entfernt den Postgres-Container UND das Volume tishreen-pgdata' -ForegroundColor Red
-    Write-Host '(Docker-Name: infra_tishreen-pgdata). Alle lokalen DB-Daten gehen verloren -' -ForegroundColor Red
-    Write-Host 'die Datenbank ist fuer ALLE Betriebsarten dieselbe!' -ForegroundColor Red
-    $answer = Read-Host 'Zum Bestaetigen JA in Grossbuchstaben eingeben'
-    if ($answer -cne 'JA') {
-        Write-Host 'Abgebrochen - nichts entfernt.'
-        return
-    }
-    & docker @Compose down --volumes --remove-orphans
-    if ($LASTEXITCODE -eq 0) { Write-Ok 'Container und Volume entfernt.' } else { Write-Err 'Entfernen fehlgeschlagen (Meldung siehe oben).' }
-}
+	if ($script:Mode -eq 'dev') {
+		Write-Host 'In DEV gibt es nichts zu bauen: spring-boot:run und der Vite-Dev-Server' -ForegroundColor Yellow
+		Write-Host 'arbeiten direkt auf dem Quellcode. Bauen lohnt fuer nearprod und prod.' -ForegroundColor Yellow
+		return $true
+	}
 
-# -------------------------------------------------------------- api and web --
+	$mvnArgs = @()
+	if ($Clean) { $mvnArgs += 'clean' }
+	$mvnArgs += @('package', '-DskipTests')
+
+	Push-Location (Join-Path $PSScriptRoot 'api')
+	try {
+		Write-Host ''
+		Write-Host "> .\mvnw.cmd $($mvnArgs -join ' ')" -ForegroundColor DarkGray
+		& .\mvnw.cmd @mvnArgs
+	} finally {
+		Pop-Location
+	}
+	if ($LASTEXITCODE -ne 0) {
+		Write-Host 'API-Build fehlgeschlagen.' -ForegroundColor Red
+		return $false
+	}
+
+	Push-Location (Join-Path $PSScriptRoot 'apps\web')
+	try {
+		Write-Host ''
+		Write-Host '> pnpm build' -ForegroundColor DarkGray
+		& pnpm build
+	} finally {
+		Pop-Location
+	}
+	if ($LASTEXITCODE -ne 0) {
+		Write-Host 'Web-Build fehlgeschlagen.' -ForegroundColor Red
+		return $false
+	}
+
+	Write-Host ''
+	Write-Host 'Artefakte gebaut: api\target (Jar) und apps\web (Web-Build).' -ForegroundColor Green
+	return $true
+}
 
 function Start-Api {
-    $m = Get-ModeConfig
-    if ($script:Mode -eq 'dev') {
-        Write-Host ('Starte die API (mvnw spring-boot:run, Profil "dev") in einem neuen Fenster (http://localhost:{0}) ...' -f $m.ApiPort)
-        Start-Process -FilePath 'cmd.exe' -ArgumentList '/k mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev' -WorkingDirectory $ApiDir
-        return
-    }
-    $jar = Find-ApiJar
-    if ($null -eq $jar) {
-        Write-Warn 'Kein Jar in api\target gefunden - erst das Artefakt bauen (Menuepunkt 8).'
-        return
-    }
-    if ($script:Mode -eq 'prod') {
-        Write-Warn 'Profil prod braucht DB_URL/DB_USER/DB_PASSWORD auf eine saubere Datenbank und echte Werte.'
-        Write-Warn 'Gegen die Dev-DB (mit Dev-Seed V900) bricht Flyway absichtlich ab - Fail-Fast, kein Skript-Fehler.'
-    }
-    Write-Host ('Starte {0} (Profil "{1}") in einem neuen Fenster (http://localhost:{2}) ...' -f $jar.Name, $m.Profil, $m.ApiPort)
-    $cmdLine = ('/k java -jar target\{0} --spring.profiles.active={1} --server.port={2}' -f $jar.Name, $m.Profil, $m.ApiPort)
-    Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine -WorkingDirectory $ApiDir
-}
-
-# Builds the delivery artifacts for NEARPROD and PROD: the Spring Boot fat jar
-# and the web production build. DEV works straight on the sources.
-function Invoke-ArtifactBuild {
-    if ($script:Mode -eq 'dev') {
-        Write-Warn 'In DEV nicht noetig: mvnw spring-boot:run und der Vite-Dev-Server arbeiten direkt auf dem Quellcode.'
-        return
-    }
-    Write-Host 'Baue das API-Jar (mvnw -DskipTests package) ...'
-    Push-Location -LiteralPath $ApiDir
-    try {
-        & .\mvnw.cmd -DskipTests package
-    } finally {
-        Pop-Location
-    }
-    if ($LASTEXITCODE -ne 0) {
-        Write-Err 'API-Build fehlgeschlagen (Meldung siehe oben).'
-        return
-    }
-    Write-Ok 'API-Jar gebaut.'
-    Write-Host 'Baue das Frontend (pnpm build in apps\web) ...'
-    Push-Location -LiteralPath $WebDir
-    try {
-        & pnpm build
-    } finally {
-        Pop-Location
-    }
-    if ($LASTEXITCODE -eq 0) { Write-Ok 'Web-Build fertig.' } else { Write-Err 'Web-Build fehlgeschlagen (Meldung siehe oben).' }
-}
-
-function Invoke-ApiTests {
-    Write-Host 'Starte mvnw verify (kann einige Minuten dauern) ...'
-    Push-Location -LiteralPath $ApiDir
-    try {
-        & .\mvnw.cmd verify
-    } finally {
-        Pop-Location
-    }
-    if ($LASTEXITCODE -eq 0) { Write-Ok 'Tests gruen.' } else { Write-Err 'Tests fehlgeschlagen (Meldung siehe oben).' }
+	$m = Get-Mode
+	$apiPort = Get-ApiPort
+	if ($script:Mode -eq 'dev') {
+		$line = "/k mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev -Dspring-boot.run.arguments=--server.port=$apiPort"
+		Write-Host ''
+		Write-Host "> cmd $line   (neues Fenster, api\)" -ForegroundColor DarkGray
+		Start-Process -FilePath 'cmd.exe' -ArgumentList $line -WorkingDirectory (Join-Path $PSScriptRoot 'api')
+		return
+	}
+	$jar = Find-ApiJar
+	if ($null -eq $jar) {
+		Write-Host 'Kein Jar in api\target. Erst Artefakte bauen (Menuepunkt 4).' -ForegroundColor Yellow
+		return
+	}
+	$line = "/k java -jar target\$($jar.Name) --spring.profiles.active=$($m['Profil']) --server.port=$apiPort"
+	Write-Host ''
+	Write-Host "> cmd $line   (neues Fenster, api\)" -ForegroundColor DarkGray
+	Start-Process -FilePath 'cmd.exe' -ArgumentList $line -WorkingDirectory (Join-Path $PSScriptRoot 'api')
 }
 
 function Start-Web {
-    $m = Get-ModeConfig
-    if ($script:Mode -eq 'dev') {
-        Write-Host ('Starte den Vite-Dev-Server in einem neuen Fenster (http://localhost:{0}) ...' -f $m.WebPort)
-        Start-Process -FilePath 'cmd.exe' -ArgumentList '/k pnpm dev' -WorkingDirectory $WebDir
-        return
-    }
-    $dist   = Join-Path $WebDir 'dist'
-    $output = Join-Path $WebDir '.output'
-    if (-not (Test-Path -LiteralPath $dist) -and -not (Test-Path -LiteralPath $output)) {
-        Write-Warn 'Kein Web-Build gefunden (apps\web\dist) - erst das Artefakt bauen (Menuepunkt 8).'
-        return
-    }
-    Write-Host ('Starte die Vorschau des gebauten Frontends in einem neuen Fenster (http://localhost:{0}) ...' -f $m.WebPort)
-    Start-Process -FilePath 'cmd.exe' -ArgumentList ('/k pnpm preview --port {0}' -f $m.WebPort) -WorkingDirectory $WebDir
+	$webPort = Get-WebPort
+	if ($script:Mode -eq 'dev') {
+		# Der Port kommt hier aus apps/web/package.json ("vite dev --port 3000");
+		# DEV_WEB_PORT in der .env muss dazu passen.
+		Write-Host ''
+		Write-Host '> cmd /k pnpm dev   (neues Fenster, apps\web)' -ForegroundColor DarkGray
+		Start-Process -FilePath 'cmd.exe' -ArgumentList '/k pnpm dev' -WorkingDirectory (Join-Path $PSScriptRoot 'apps\web')
+		return
+	}
+	$dist   = Join-Path $PSScriptRoot 'apps\web\dist'
+	$output = Join-Path $PSScriptRoot 'apps\web\.output'
+	if (-not (Test-Path $dist) -and -not (Test-Path $output)) {
+		Write-Host 'Kein Web-Build in apps\web. Erst Artefakte bauen (Menuepunkt 4).' -ForegroundColor Yellow
+		return
+	}
+	$line = "/k pnpm preview --port $webPort"
+	Write-Host ''
+	Write-Host "> cmd $line   (neues Fenster, apps\web)" -ForegroundColor DarkGray
+	Start-Process -FilePath 'cmd.exe' -ArgumentList $line -WorkingDirectory (Join-Path $PSScriptRoot 'apps\web')
+}
+
+function Start-Betriebsart {
+	param([switch]$Build)
+	$m = Get-Mode
+	Write-Head "$($m['Label']) starten"
+	Write-Host $m['Hinweis'] -ForegroundColor DarkGray
+
+	if ($script:Mode -eq 'prod') {
+		Write-Host ''
+		Write-Host 'Profil prod braucht echte Werte (DB_URL/DB_USER/DB_PASSWORD auf eine' -ForegroundColor Yellow
+		Write-Host 'saubere Datenbank). Gegen die Dev-DB mit Dev-Seed V900 bricht Flyway' -ForegroundColor Yellow
+		Write-Host 'absichtlich ab. Genau so ist die Fail-Fast-Regel gemeint; die Meldung' -ForegroundColor Yellow
+		Write-Host 'steht danach im API-Fenster.' -ForegroundColor Yellow
+	}
+
+	if ($Build) {
+		if (-not (Invoke-ArtefakteBauen)) { return }
+	}
+
+	Start-Datenbank
+	if ($script:LastDockerExit -ne 0) { return }
+	Start-Api
+	Start-Web
+	Show-Adressen
+}
+
+function Show-Status {
+	Write-Head 'Status: Datenbank-Container'
+	Invoke-Compose @('ps', '--format', 'table {{.Name}}\t{{.Status}}\t{{.Ports}}')
+	Write-Host ''
+	Write-Host 'API und Web laufen auf dem Host in eigenen Fenstern; ihren Zustand' -ForegroundColor DarkGray
+	Write-Host 'zeigt Menuepunkt 8 (Gesundheit pruefen).' -ForegroundColor DarkGray
+}
+
+function Test-Gesundheit {
+	$webPort = Get-WebPort
+	$apiPort = Get-ApiPort
+	$m = Get-Mode
+	Write-Head "Gesundheit: $($m['Label'])"
+	if (Invoke-Quiet 'docker' ((@('compose') + (Get-ComposeArgs)) + @('exec', '-T', 'postgres', 'pg_isready', '-U', (Get-DbUser), '-d', (Get-DbName)))) {
+		Write-Host ("  {0,-30} bereit (127.0.0.1:{1})" -f 'Postgres (gemeinsam)', (Get-DbPort)) -ForegroundColor Green
+	} else {
+		Write-Host ("  {0,-30} nicht bereit (Menuepunkt 3)" -f 'Postgres (gemeinsam)') -ForegroundColor Red
+	}
+	Test-Endpoint -Label 'Oberflaeche' -Url "http://localhost:$webPort/"
+	Test-Endpoint -Label 'API Health' -Url "http://localhost:$apiPort/actuator/health"
+	if ($m['Profil'] -eq 'dev') {
+		Test-Endpoint -Label 'OpenAPI-Dokument' -Url "http://localhost:$apiPort/api/v1/docs"
+	} else {
+		Write-Host '  OpenAPI-Dokument               im Profil prod abgeschaltet, 404 erwartet' -ForegroundColor DarkGray
+		Test-Endpoint -Label 'OpenAPI-Dokument' -Url "http://localhost:$apiPort/api/v1/docs"
+	}
+}
+
+function Test-GesundheitAlle {
+	Write-Head 'Gesundheit aller Betriebsarten'
+	$merken = $script:Mode
+	foreach ($key in @($Modes.Keys)) {
+		$script:Mode = $key
+		Test-Gesundheit
+	}
+	$script:Mode = $merken
+}
+
+# Folgt den Datenbank-Logs. Strg+C beendet NUR diese Anzeige: solange der
+# Log-Client laeuft, wird Strg+C als Tastendruck gelesen (TreatControlCAsInput)
+# und dann nur der Client-Prozessbaum beendet. Der Container laeuft weiter,
+# das Menue kommt zurueck. (Bewusste Abweichung vom Vorbild: bei direktem
+# Aufruf wuerde Strg+C unter PS 5.1 auch das Skript beenden.)
+function Watch-DbLogs {
+	$logArgs = (@('compose') + (Get-ComposeArgs)) + @('logs', '-f', '--tail', '100', 'postgres')
+	Write-Host ''
+	Write-Host "> docker $($logArgs -join ' ')" -ForegroundColor DarkGray
+	Write-Host 'Strg+C beendet nur die Anzeige, der Container laeuft weiter.' -ForegroundColor Yellow
+	$prev = [Console]::TreatControlCAsInput
+	[Console]::TreatControlCAsInput = $true
+	$proc = $null
+	try {
+		$proc = Start-Process -FilePath 'docker' -ArgumentList ($logArgs -join ' ') -NoNewWindow -PassThru
+		while (-not $proc.HasExited) {
+			if ([Console]::KeyAvailable) {
+				$key = [Console]::ReadKey($true)
+				$ctrl = (($key.Modifiers -band [ConsoleModifiers]::Control) -ne 0)
+				if ($ctrl -and $key.Key -eq [ConsoleKey]::C) { break }
+			}
+			Start-Sleep -Milliseconds 200
+		}
+	} finally {
+		if ($null -ne $proc -and -not $proc.HasExited) {
+			# docker.exe startet das Compose-Plugin als Kindprozess - den Baum beenden.
+			Invoke-Quiet 'taskkill.exe' @('/PID', "$($proc.Id)", '/T', '/F') | Out-Null
+		}
+		[Console]::TreatControlCAsInput = $prev
+	}
+	Write-Host ''
+	Write-Host 'Log-Anzeige beendet, der Container laeuft weiter.'
+}
+
+function Open-Psql {
+	Write-Head "psql als $(Get-DbUser) in $(Get-DbName)"
+	Write-Host 'Die Datenbank ist fuer alle Betriebsarten dieselbe. Beenden mit \q' -ForegroundColor DarkGray
+	Invoke-Compose @('exec', 'postgres', 'psql', '-U', (Get-DbUser), '-d', (Get-DbName))
+}
+
+function Invoke-ApiTests {
+	Write-Head 'API-Tests auf dem Host'
+	Write-Host 'Laufen gegen die Datenbank aus infra\docker-compose.yml (POSTGRES_PORT).' -ForegroundColor DarkGray
+	Push-Location (Join-Path $PSScriptRoot 'api')
+	try {
+		Write-Host ''
+		Write-Host '> .\mvnw.cmd verify' -ForegroundColor DarkGray
+		& .\mvnw.cmd verify
+	} finally {
+		Pop-Location
+	}
+}
+
+function Invoke-WebTests {
+	Write-Head 'Web-Tests auf dem Host'
+	Push-Location (Join-Path $PSScriptRoot 'apps\web')
+	try {
+		Write-Host ''
+		Write-Host '> pnpm test' -ForegroundColor DarkGray
+		& pnpm test
+	} finally {
+		Pop-Location
+	}
 }
 
 function Invoke-TurboTask {
-    param([string]$Task)
-    Write-Host ('Starte "pnpm {0}" (Turbo, alle Pakete) ...' -f $Task)
-    Push-Location -LiteralPath $RepoRoot
-    try {
-        & pnpm $Task
-    } finally {
-        Pop-Location
-    }
-    if ($LASTEXITCODE -eq 0) { Write-Ok ('{0} gruen.' -f $Task) } else { Write-Err ('{0} fehlgeschlagen (Meldung siehe oben).' -f $Task) }
+	param([string]$Task)
+	Write-Head "$Task auf dem Host (Turbo, alle Pakete)"
+	Push-Location $PSScriptRoot
+	try {
+		Write-Host ''
+		Write-Host "> pnpm $Task" -ForegroundColor DarkGray
+		& pnpm $Task
+	} finally {
+		Pop-Location
+	}
 }
 
 function Start-Mobile {
-    if (-not (Test-Path -LiteralPath $MobileDir)) {
-        Write-Warn 'apps\mobile existiert nicht in diesem Checkout.'
-        return
-    }
-    Write-Host 'Starte den Expo-Dev-Server (apps\mobile) in einem neuen Fenster ...'
-    Start-Process -FilePath 'cmd.exe' -ArgumentList '/k pnpm dev' -WorkingDirectory $MobileDir
+	Write-Head 'Mobile: Expo-Dev-Server'
+	if (-not (Test-Path (Join-Path $PSScriptRoot 'apps\mobile'))) {
+		Write-Host 'apps\mobile existiert nicht in diesem Checkout.' -ForegroundColor Yellow
+		return
+	}
+	Write-Host ''
+	Write-Host '> cmd /k pnpm dev   (neues Fenster, apps\mobile)' -ForegroundColor DarkGray
+	Start-Process -FilePath 'cmd.exe' -ArgumentList '/k pnpm dev' -WorkingDirectory (Join-Path $PSScriptRoot 'apps\mobile')
 }
 
-# ------------------------------------------------------------------- health --
-
-function Show-Health {
-    $cfg = Get-DbConfig
-    $m = Get-ModeConfig
-    Write-Host ''
-    Write-Host ('Gesundheits-Check ({0}):' -f $m.Label)
-    if (-not (Invoke-Quiet 'docker' @('info'))) {
-        Write-Err 'Docker-Daemon nicht erreichbar - Docker Desktop starten.'
-    } elseif (Invoke-Quiet 'docker' ($Compose + @('exec', '-T', 'postgres', 'pg_isready', '-U', $cfg.User, '-d', $cfg.Db))) {
-        Write-Ok ('Postgres bereit (127.0.0.1:{0}).' -f $cfg.Port)
-    } else {
-        Write-Err 'Postgres nicht bereit - Container gestartet? (Menuepunkte 1 und 3)'
-    }
-    Show-HttpHealth -Name 'API' -Url ('http://localhost:{0}/actuator/health' -f $m.ApiPort) -Port $m.ApiPort
-    Show-HttpHealth -Name 'Web' -Url ('http://localhost:{0}/' -f $m.WebPort) -Port $m.WebPort
+function Stop-Datenbank {
+	Write-Head 'Datenbank stoppen'
+	Write-Host 'Container und Daten bleiben; der naechste Start ist schnell.' -ForegroundColor DarkGray
+	Invoke-Compose @('stop')
 }
 
-# A 4xx answer counts as a sign of life (the server responded), not an outage.
-function Show-HttpHealth {
-    param([string]$Name, [string]$Url, [int]$Port)
-    $status = Get-HttpStatus -Url $Url -Port $Port
-    if ($null -eq $status) {
-        Write-Err ('{0} nicht erreichbar ({1}).' -f $Name, $Url)
-    } elseif ($status -eq -1) {
-        Write-Ok ('{0}: Port {1} offen (TCP-Check, da curl.exe fehlt - kein HTTP-Status verfuegbar).' -f $Name, $Port)
-    } elseif ($status -eq 200) {
-        Write-Ok ('{0} erreichbar (HTTP 200, {1}).' -f $Name, $Url)
-    } elseif ($status -eq 503) {
-        Write-Warn ('{0} erreichbar, meldet aber Status DOWN (HTTP 503) - Datenbank pruefen.' -f $Name)
-    } elseif ($status -ge 400 -and $status -lt 500) {
-        Write-Ok ('{0} erreichbar (HTTP {1} - Lebenszeichen).' -f $Name, $status)
-    } else {
-        Write-Warn ('{0} antwortet mit HTTP {1}.' -f $Name, $status)
-    }
+function Remove-DatenbankContainer {
+	Write-Head 'Datenbank-Container entfernen'
+	Write-Host 'Das Volume tishreen-pgdata und damit die Daten bleiben erhalten.' -ForegroundColor DarkGray
+	Invoke-Compose @('down', '--remove-orphans')
 }
 
-# --------------------------------------------------------------------- menu --
-
-function Select-Mode {
-    Write-Host ''
-    Write-Host 'Betriebsart waehlen:'
-    $keys = @($Modes.Keys)
-    for ($i = 0; $i -lt $keys.Count; $i++) {
-        $m = $Modes[$keys[$i]]
-        Write-Host ('  {0}  {1,-32} Profil {2}, API {3}, Web {4}' -f ($i + 1), $m.Label, $m.Profil, $m.ApiPort, $m.WebPort)
-        Write-Host ('       {0}' -f $m.Hinweis) -ForegroundColor DarkGray
-    }
-    $answer = Read-Host 'Nummer'
-    $index = 0
-    if ([int]::TryParse($answer, [ref]$index) -and $index -ge 1 -and $index -le $keys.Count) {
-        $script:Mode = $keys[$index - 1]
-        Write-Ok ('Betriebsart ist jetzt {0}.' -f (Get-ModeConfig).Label)
-    } else {
-        Write-Host 'Unveraendert.'
-    }
+function Remove-Datenbank {
+	Write-Head 'Datenbank vollstaendig entfernen'
+	Write-Host 'Das loescht den Postgres-Container UND das Volume tishreen-pgdata' -ForegroundColor Yellow
+	Write-Host '(Docker-Name: infra_tishreen-pgdata). Die Datenbank ist fuer ALLE' -ForegroundColor Yellow
+	Write-Host 'Betriebsarten dieselbe.' -ForegroundColor Yellow
+	if (Confirm-Action 'Alle lokalen Datenbank-Daten sind danach weg.') {
+		Invoke-Compose @('down', '-v', '--remove-orphans')
+	}
 }
+
+# --------------------------------------------------------------------------
+# Menue
+# --------------------------------------------------------------------------
 
 function Show-Menu {
-    $cfg = Get-DbConfig
-    $m = Get-ModeConfig
-    Write-Host ''
-    Write-Host '=== Tishreen Mall - lokaler Dev-Stack =========================' -ForegroundColor Cyan
-    Write-Host ('    Betriebsart: {0}  (Spring-Profil {1})' -f $m.Label, $m.Profil) -ForegroundColor Green
-    Write-Host ('    Postgres 127.0.0.1:{0} | API http://localhost:{1} | Web http://localhost:{2}' -f $cfg.Port, $m.ApiPort, $m.WebPort)
-    Write-Host ''
-    Write-Host '    b  Betriebsart wechseln  (dev / nearprod / prod)'
-    Write-Host ''
-    Write-Host '  Datenbank (Docker, eine gemeinsame fuer alle Betriebsarten)'
-    Write-Host '    1  Starten'
-    Write-Host '    2  Stoppen'
-    Write-Host '    3  Status'
-    Write-Host '    4  Logs folgen          (Strg+C beendet nur die Anzeige)'
-    Write-Host '    5  psql-Shell           (verlassen mit \q)'
-    Write-Host '    6  Komplett entfernen   (inkl. Volume - Datenverlust!)'
-    Write-Host '  API (Host)'
-    Write-Host '    7  Starten              (dev: mvnw spring-boot:run | sonst: Jar; neues Fenster)'
-    Write-Host '    8  Artefakte bauen      (API-Jar + Web-Build; fuer nearprod/prod)'
-    Write-Host '    9  Tests: mvnw verify'
-    Write-Host '  Web (Host)'
-    Write-Host '   10  Starten              (dev: Vite-Dev-Server | sonst: preview; neues Fenster)'
-    Write-Host '   11  Lint      (Turbo)'
-    Write-Host '   12  Typecheck (Turbo)'
-    Write-Host '   13  Mobile: Expo starten (neues Fenster)'
-    Write-Host '  Stack'
-    Write-Host '   14  Gesundheit checken'
-    Write-Host '    0  Beenden'
-    Write-Host ''
+	$m = Get-Mode
+	Write-Host ''
+	Write-Host '=====================================================' -ForegroundColor Cyan
+	Write-Host ' Tishreen Mall: Steuerung des lokalen Dev-Stacks' -ForegroundColor Cyan
+	Write-Host '=====================================================' -ForegroundColor Cyan
+	Write-Host ''
+	Write-Host (" Betriebsart : {0}" -f $m['Label']) -ForegroundColor Green
+	Write-Host ("               Spring-Profil {0}, API {1}, Oberflaeche {2}, Postgres {3}" -f $m['Profil'], (Get-ApiPort), (Get-WebPort), (Get-DbPort)) -ForegroundColor DarkGray
+	Write-Host ''
+	Write-Host '   b  Betriebsart wechseln' -ForegroundColor White
+	Write-Host ''
+	Write-Host ' Starten und bauen                        (gilt fuer die Betriebsart oben)' -ForegroundColor White
+	Write-Host '   1  Starten                       (Datenbank + API + Web)'
+	Write-Host '   2  Neu bauen und starten         (Artefakte vorher neu bauen)'
+	Write-Host '   3  Nur die Datenbank starten'
+	Write-Host '   4  Artefakte bauen, ohne zu starten   (Jar + Web-Build fuer nearprod/prod)'
+	Write-Host '   5  Artefakte sauber neu bauen    (mvnw clean package, bei kaputtem target\)'
+	Write-Host ''
+	Write-Host ' Beobachten' -ForegroundColor White
+	Write-Host '   6  Status                        (Datenbank-Container)'
+	Write-Host '   7  Gesundheit ALLER Betriebsarten'
+	Write-Host '   8  Gesundheit pruefen            (Postgres, Oberflaeche, Health, OpenAPI)'
+	Write-Host '   9  Logs folgen: Datenbank        (Strg+C beendet nur die Anzeige)'
+	Write-Host '      API und Web loggen in ihren eigenen Fenstern.' -ForegroundColor DarkGray
+	Write-Host ''
+	Write-Host ' Arbeiten' -ForegroundColor White
+	Write-Host '  10  psql in der Datenbank'
+	Write-Host '  11  API-Tests auf dem Host        (.\mvnw.cmd verify)'
+	Write-Host '  12  Web-Tests auf dem Host        (pnpm test in apps\web, Vitest)'
+	Write-Host '  13  Lint auf dem Host             (pnpm lint ueber Turbo)'
+	Write-Host '  14  Typecheck auf dem Host        (pnpm typecheck ueber Turbo)'
+	Write-Host '  15  Format auf dem Host           (pnpm format ueber Turbo, Prettier)'
+	Write-Host '  16  Mobile: Expo-Dev-Server       (neues Fenster)'
+	Write-Host ''
+	Write-Host ' Aufraeumen' -ForegroundColor White
+	Write-Host '  17  Datenbank stoppen             (Container und Daten bleiben)'
+	Write-Host '  18  Datenbank-Container entfernen (Volume und Daten bleiben)'
+	Write-Host '  19  Datenbank vollstaendig entfernen   [inkl. Volume tishreen-pgdata]'
+	Write-Host ''
+	Write-Host '   0  Beenden' -ForegroundColor White
+	Write-Host ''
 }
-
-# ---------------------------------------------------------------- main flow --
 
 if ($Check) {
-    Write-Host 'Pruefe Voraussetzungen ...'
-    $problems = @(Test-Prerequisites)
-    if ($problems.Count -eq 0) {
-        Write-Ok 'Alle Voraussetzungen erfuellt.'
-        exit 0
-    }
-    foreach ($p in $problems) { Write-Err $p }
-    exit 1
+	if (Test-Voraussetzungen) {
+		Write-Host 'Alle Voraussetzungen erfuellt.' -ForegroundColor Green
+		exit 0
+	}
+	exit 1
 }
 
-# Guard against non-interactive use: Read-Host would return empty strings
-# forever and the menu would spin in a tight loop.
+# Schutz gegen einen nicht-interaktiven Aufruf: kommt die Eingabe aus einer
+# Datei oder einer Pipeline, liefert Read-Host am Ende endlos leere Zeilen,
+# und das Menue liefe fuer immer.
 if ([Console]::IsInputRedirected) {
-    Write-Host 'tishreen.ps1 ist ein interaktives Menue und braucht eine echte Konsole.'
-    Write-Host 'Fuer nicht-interaktive Aufrufe: .\tishreen.ps1 -Check'
-    exit 1
+	Write-Host 'tishreen.ps1 ist ein interaktives Menue und braucht eine echte Konsole.'
+	Write-Host 'Fuer nicht-interaktive Aufrufe: .\tishreen.ps1 -Check'
+	exit 1
 }
 
-Write-Host 'Pruefe Voraussetzungen ...'
-$problems = @(Test-Prerequisites -OfferDockerStart)
-if ($problems.Count -gt 0) {
-    Write-Host ''
-    Write-Host 'Es fehlen Voraussetzungen fuer den Dev-Stack:' -ForegroundColor Red
-    foreach ($p in $problems) { Write-Err $p }
-    Write-Host ''
-    Write-Host 'Bitte beheben und das Skript erneut starten.'
-    exit 1
+if (-not (Test-Voraussetzungen -OfferDockerStart)) {
+	Write-Host ''
+	Write-Host 'Abgebrochen.' -ForegroundColor Red
+	exit 1
 }
-Write-Ok 'Alle Voraussetzungen erfuellt.'
 
-$emptyInputs = 0
-$done = $false
-while (-not $done) {
-    Show-Menu
-    $choice = Read-Host 'Auswahl'
-    if ([string]::IsNullOrWhiteSpace($choice)) {
-        $emptyInputs++
-        if ($emptyInputs -ge 3) {
-            Write-Host 'Mehrfach leere Eingabe - vermutlich keine interaktive Konsole. Beende.'
-            exit 1
-        }
-        continue
-    }
-    $emptyInputs = 0
-    switch ($choice.Trim()) {
-        'b'  { Select-Mode }
-        '1'  { Start-Db }
-        '2'  { Stop-Db }
-        '3'  { Show-DbStatus }
-        '4'  { Watch-DbLogs }
-        '5'  { Open-DbShell }
-        '6'  { Remove-Db }
-        '7'  { Start-Api }
-        '8'  { Invoke-ArtifactBuild }
-        '9'  { Invoke-ApiTests }
-        '10' { Start-Web }
-        '11' { Invoke-TurboTask -Task 'lint' }
-        '12' { Invoke-TurboTask -Task 'typecheck' }
-        '13' { Start-Mobile }
-        '14' { Show-Health }
-        '0'  { $done = $true }
-        'q'  { $done = $true }
-        default { Write-Warn ('Unbekannte Auswahl: {0}' -f $choice) }
-    }
-    if (-not $done) { Wait-Enter }
+$running = $true
+$leereEingaben = 0
+
+while ($running) {
+	Show-Menu
+	$choice = Read-Host 'Auswahl'
+
+	if ([string]::IsNullOrWhiteSpace($choice)) {
+		$leereEingaben++
+		if ($leereEingaben -ge 3) {
+			Write-Host ''
+			Write-Host 'Keine Eingabe. Beendet.' -ForegroundColor Yellow
+			break
+		}
+		continue
+	}
+	$leereEingaben = 0
+
+	switch ($choice.Trim().ToLower()) {
+		'b'  { Select-Betriebsart }
+		'1'  { Start-Betriebsart }
+		'2'  { Start-Betriebsart -Build }
+		'3'  { Write-Head 'Nur die Datenbank starten'; Start-Datenbank }
+		'4'  { Write-Head 'Artefakte bauen, ohne zu starten'; Invoke-ArtefakteBauen | Out-Null }
+		'5'  { Write-Head 'Artefakte sauber neu bauen'; Invoke-ArtefakteBauen -Clean | Out-Null }
+		'6'  { Show-Status }
+		'7'  { Test-GesundheitAlle }
+		'8'  { Test-Gesundheit }
+		'9'  { Watch-DbLogs }
+		'10' { Open-Psql }
+		'11' { Invoke-ApiTests }
+		'12' { Invoke-WebTests }
+		'13' { Invoke-TurboTask -Task 'lint' }
+		'14' { Invoke-TurboTask -Task 'typecheck' }
+		'15' { Invoke-TurboTask -Task 'format' }
+		'16' { Start-Mobile }
+		'17' { Stop-Datenbank }
+		'18' { Remove-DatenbankContainer }
+		'19' { Remove-Datenbank }
+		'0'  { $running = $false }
+		default { Write-Host ''; Write-Host "Unbekannte Auswahl: $choice" -ForegroundColor Red }
+	}
+
+	if ($running) {
+		Write-Host ''
+		Read-Host 'Weiter mit Eingabetaste' | Out-Null
+	}
 }
-Write-Host 'Bis bald.'
-exit 0
