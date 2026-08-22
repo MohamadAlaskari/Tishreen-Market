@@ -45,6 +45,19 @@ tishreen-handoff/
 4. Open Claude Code in the folder (`claude`), or Cursor with the Claude Code extension. The `SessionStart` hook prints the orientation line; `CLAUDE.md` is loaded automatically.
 5. First session: `/phase 1 start` → it lists Phase-1 tasks from `docs/12-build-plan.md` and creates the branch. Then `/phase 1 next` for each task.
 
+## Local development on Windows (`tishreen.ps1`)
+
+`.\tishreen.ps1` in the repo root is a menu-driven control script for the local dev stack from `docs/09-architecture.md` §4 (runs unchanged on Windows PowerShell 5.1 and PowerShell 7):
+
+- operating modes `dev` / `nearprod` / `prod` (preselect with `-Mode`, switch with `b` in the menu): `dev` runs API and web from source (`mvnw spring-boot:run`, Vite dev server), `nearprod` runs the built jar and the built frontend (`vite preview`) still on Spring profile `dev` (delivery check), `prod` runs the jar with profile `prod` — no Swagger, no dev seed, fail-fast without real configuration. Per-mode ports (API/web): 8080/3000, 8180/3100, 8280/3200. Unlike the eportfolio model there is ONE shared Docker database — the target deployment is nginx + systemd (docs/09 §5), not containers.
+- checks every prerequisite up front (Docker daemon, Compose v2, `infra/.env`, Node, pnpm, JDK) and names what is missing instead of failing later with raw Compose/Maven errors; offers to start Docker Desktop. `.\tishreen.ps1 -Check` runs only this check (non-interactive, exit code 0/1).
+- database: start (waits until `pg_isready` is green), stop, status, follow logs (Ctrl+C only ends the view, not the container), `psql` shell, full removal including the `tishreen-pgdata` volume (guarded by an explicit confirmation).
+- API: start per mode in a new window; build the delivery artifacts (`mvnw -DskipTests package` + `pnpm build`); `mvnw verify`.
+- web: start per mode in a new window; `lint`/`typecheck` via Turbo; optional Expo start for `apps/mobile`.
+- health check: Postgres (`pg_isready`), API (`/actuator/health`) and web on the current mode's ports via `curl.exe` (a 4xx answer counts as alive).
+
+Ports and credentials are read from `infra/.env` (fallback: the defaults in `infra/docker-compose.yml`); secrets are never printed.
+
 ## How to work
 - **One task per session**, sized by `docs/12`. Say **«weiter» / «كمّل»** to move to the next task.
 - Use the slash commands instead of free-form prompts when they fit: `/new-endpoint POST /orders`, `/new-route /staff/orders/:id`, `/new-migration add index …`, `/review-rtl`, `/review-tokens 8:5`, `/preflight` before every commit, `/phase n checklist` at the end of a phase.

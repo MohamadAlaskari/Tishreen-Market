@@ -119,7 +119,7 @@ public ProductDto updatePrice(@AuditId Long id, BigDecimal price) { … }
 
 ## 4. Local development
 
-`infra/docker-compose.yml`: `postgres:15` (port 5432, volume), optional `minio`. API: `./mvnw spring-boot:run -Dspring-boot.run.profiles=dev` (Flyway applies V1, V2, V900). Web: `pnpm dev` (proxy `/api` → `localhost:8080`). Dev accounts: see `04-seed.sql` Part B (`Tishreen!Dev1`).
+`infra/docker-compose.yml`: `postgres:15` (port 5432, volume), optional `minio`. API: `./mvnw spring-boot:run -Dspring-boot.run.profiles=dev` (Flyway applies V1, V2, V900). Web: `pnpm dev` (proxy `/api` → `localhost:8080`). Dev accounts: see `04-seed.sql` Part B (`Tishreen!Dev1`). On Windows, `tishreen.ps1` (repo root) drives all three via a menu: prerequisite checks, DB lifecycle (up/stop/status/logs/psql/remove incl. volume), API/web starters in three operating modes (`dev` source run · `nearprod` built jar + `vite preview` on profile dev · `prod` profile prod, fail-fast without real config; one shared DB) and health checks.
 
 ## 5. Deployment (Phase 5+)
 - Single VPS (non-US-blocking provider), Ubuntu, nginx (TLS, static web, `/api` proxy, `/media` static for local-disk), systemd service for the API (fat jar), Postgres local, fonts/Leaflet/tiles reachability test from inside Syria before launch.
