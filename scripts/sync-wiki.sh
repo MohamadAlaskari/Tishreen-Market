@@ -5,7 +5,8 @@
 #   bash scripts/sync-wiki.sh <wiki-dir>   # Seiten in eine geklonte Wiki-Arbeitskopie generieren (CI)
 #   bash scripts/sync-wiki.sh --push       # klonen + generieren + committen + pushen (lokal)
 #
-# Quelle der Wahrheit: tishreen-handoff/tishreen-handoff/  (docs/, CLAUDE.md, README.md, .cursor/rules/)
+# Quelle der Wahrheit: tishreen-handoff/tishreen-handoff/  (docs/, CLAUDE.md, README.md)
+#                      + Editor-Regeln aus <Repo-Root>/.cursor/rules/
 # Wiki:                https://github.com/MohamadAlaskari/Tishreen-Market/wiki
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -70,9 +71,9 @@ md_page "$SRC/CLAUDE.md" "Rules.md"
 
 # Editor-Regeln (.cursor) — als eine Seite gebündelt
 {
-  note "$SRC_REL/.cursor/rules/"
+  note ".cursor/rules/"
   printf '# Editor-Regeln (Cursor)\n\nDieselben Regeln, die Claude Code über `CLAUDE.md` und die Hooks erzwingt — als `.mdc`-Dateien für Cursors eigenen Agenten.\n'
-  for f in "$SRC"/.cursor/rules/*.mdc; do
+  for f in "$ROOT"/.cursor/rules/*.mdc; do
     printf '\n## `%s`\n\n````markdown\n' "$(basename "$f")"
     cat "$f"
     printf '\n````\n'

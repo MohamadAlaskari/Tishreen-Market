@@ -1,0 +1,11 @@
+---
+description: Frontend rules for apps/web and packages/ui (TanStack Start, React 19, Tailwind v4, shadcn/ui, react-i18next)
+globs: ["apps/web/**", "packages/ui/**"]
+alwaysApply: false
+---
+See `tishreen-handoff/tishreen-handoff/docs/07-routes-screens.md`, `tishreen-handoff/tishreen-handoff/docs/08-design-system.md`, `tishreen-handoff/tishreen-handoff/docs/10-i18n.md` and `.claude/skills/tanstack-rtl-i18n/SKILL.md`.
+- Route files under `src/routes/_customer|_staff|_driver|_admin|_it/` with `beforeLoad` guards; data via TanStack Query options in `src/features/<domain>/api.ts`.
+- shadcn components added with `pnpm dlx shadcn@latest add <name>` inside `apps/web`; imports from `@workspace/ui/components/*`.
+- Formatters only from `src/lib/format.ts` (`ar-SY-u-nu-latn`, `Asia/Damascus`). Numbers in Arabic text inside `<bdi>`; phone/OTP inputs `dir="ltr"`.
+- Every screen: skeleton, empty, error (with correlation id), 360 px, dark mode, keyboard focus. Driver screens work offline (IndexedDB queue + `Idempotency-Key`).
+- Tests: Vitest + Testing Library with `toHaveNoPhysicalDirectionClasses`; render in both `dir="rtl"` and `dir="ltr"`.

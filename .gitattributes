@@ -2,3 +2,7 @@
 # their generator. Pin LF so they never show up as falsely "modified" on
 # Windows checkouts with core.autocrlf=true.
 *.gen.ts text eol=lf
+
+# Shell scripts (Claude-Code-Hooks, Wiki-Sync) must stay LF: bash on Windows
+# fails on CRLF line endings ("\r: command not found").
+*.sh text eol=lf
