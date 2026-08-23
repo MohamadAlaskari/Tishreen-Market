@@ -7,8 +7,9 @@ Entities never leave the service layer — every endpoint speaks DTOs (records).
 
 ### Auth
 - `Authorization: Bearer <accessToken>` (JWT HS256, 30 min, claims: `sub`=userId, `role`, `status`, `lang`, `perms[]`).
-- Refresh token: HttpOnly, Secure, SameSite=Lax cookie `tishreen_rt` (JWT, 7 days, rotated on each refresh; claim `pv` = password-version derived from `password_hash` prefix so a password change invalidates it).
-  - **Forward note — mobile (ADR-0004):** the Expo app cannot rely on browser cookies. The mobile track will specify a cookie-less refresh variant (refresh token in the response body, kept in secure storage, same rotation and `pv` rules) before mobile auth is implemented. The web contract above stays unchanged.
+- Refresh token (web): HttpOnly, Secure, SameSite=Lax cookie `tishreen_rt` (JWT, 7 days, rotated on each refresh; claim `pv` = password-version derived from `password_hash` prefix so a password change invalidates it).
+- **Native clients (`apps/mobile`, ADR-0004/ADR-0010 — app spec in `14-mobile.md`):** the Expo app cannot use browser cookies. A native client sends the header `X-Client: mobile` on `POST /auth/login` and `POST /auth/refresh`; the response then carries the refresh token in the **body** (`refreshToken`, `refreshExpiresIn`) and sets no cookie. `POST /auth/refresh` accepts `{refreshToken}` in the body; token format, 7-day lifetime, rotation on each refresh and the `pv` claim are **identical** to the cookie variant — one issuer/validator, two transports. The client keeps the refresh token in Expo SecureStore (never AsyncStorage), the access token in memory only; the refresh token is never logged (same masking discipline as OTP codes). `POST /auth/logout` without the cookie simply returns `204` — deleting the SecureStore entry is the client's job (stateless server, as for web where only the cookie is cleared).
+- **CORS and native clients:** CORS is a browser mechanism — native requests send no `Origin` header and are not subject to it, so the native app needs **no** CORS entry and `app.cors.origins` stays web-only (no wildcard). Rate limits on `/auth/**` and the `JwtAuthFilter` status re-check apply to native clients unchanged.
 - `BLOCKED` users: login `403 USER_BLOCKED`; existing access tokens are rejected by `JwtAuthFilter` which re-checks `users.status` from a 60s cache.
 - Authorization: `@PreAuthorize("hasAuthority('ORDER_MANAGE')")` on controller methods; customer endpoints use `hasRole('CUSTOMER')` + ownership in the service (`404` when not owner).
 
@@ -70,9 +71,9 @@ OrderDto = { id, orderNumber, status, fulfillmentType, lang, pickupTime?, addres
 | Method & path | Auth | Body → Response |
 |---|---|---|
 | `POST /auth/register` | public | `{fullName, phone, password, preferredLanguage?}` → `201 {userId, status:'PENDING'}`. Creates `customer_profiles`. Password policy: ≥ 8 chars. |
-| `POST /auth/login` | public | `{phone, password}` → `200 {accessToken, expiresIn, user: UserSummary}` + refresh cookie. Updates `last_login_at`. |
-| `POST /auth/refresh` | cookie | → `200 {accessToken, expiresIn}` + rotated cookie |
-| `POST /auth/logout` | any | clears cookie → `204` |
+| `POST /auth/login` | public | `{phone, password}` → `200 {accessToken, expiresIn, user: UserSummary}` + refresh cookie. With header `X-Client: mobile`: → `200 {accessToken, expiresIn, refreshToken, refreshExpiresIn, user}`, no cookie (§1). Updates `last_login_at`. |
+| `POST /auth/refresh` | cookie **or** body | cookie (web) → `200 {accessToken, expiresIn}` + rotated cookie · `{refreshToken}` + `X-Client: mobile` (native) → `200 {accessToken, expiresIn, refreshToken, refreshExpiresIn}` (rotated, in body) |
+| `POST /auth/logout` | any | clears cookie (web) → `204`; native clients delete their SecureStore entry (§1) |
 | `POST /auth/activate` | PENDING/OTP_SENT | `{code}` → `200 {user}` (now ACTIVE) |
 | `POST /auth/password-reset/request` | public | `{phone}` → `202` always |
 | `POST /auth/password-reset/confirm` | public | `{phone, code, newPassword}` → `204` |
@@ -258,5 +259,5 @@ Dashboard: `GET /admin/dashboard` → `{ordersToday: {byStatus}, revenue: {today
 - Driver endpoints: `deliveries.driver_id = current` → `404` otherwise.
 - Every mutating endpoint validates its DTO (`@Valid`) and maps to a business exception (`422`) — never a raw `DataIntegrityViolationException`.
 - File uploads: content sniffing (magic bytes), size limit, re-encode to WebP.
-- CORS: only the web origin(s) from `app.cors.origins`; credentials allowed (refresh cookie). Local modes (no dev proxy — `09 §4`): `http://localhost:3000` (dev) / `:3100` (nearprod) / `:3200` (prod mode); on the VPS web and API share one origin behind nginx.
+- CORS: only the web origin(s) from `app.cors.origins`; credentials allowed (refresh cookie). Local modes (no dev proxy — `09 §4`): `http://localhost:3000` (dev) / `:3100` (nearprod) / `:3200` (prod mode); on the VPS web and API share one origin behind nginx. Native mobile clients send no `Origin` header — CORS never applies to them and the allowlist stays web-only (§1).
 - Headers: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, CSP for `/media`.

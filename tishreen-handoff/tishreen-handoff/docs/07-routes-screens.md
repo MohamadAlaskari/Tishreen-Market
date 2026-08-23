@@ -2,6 +2,7 @@
 
 Figma file `0RLOI0q7lWCK1Rme8JjkKu`, pages: `01 · Foundations`, `02 · Components`, `03 · Customer`, `04 · Staff`, `05 · Driver`, `06 · Admin`, `07 · IT`, `08 · Flows`. Every screen frame is named by its route (`/staff/orders/:id`).
 Prototype transitions: forward = push from the **right** (RTL), back = pop.
+This file covers the **web** app. The native customer app's screens and navigation live in `14-mobile.md §2` (expo-router); its components reuse the mapping in §9 by name.
 
 ## 1. Route tree (TanStack Start, file-based)
 

@@ -9,6 +9,7 @@
 - [ ] Sensitive operation → audited (check the mandatory list in `01 F-04`).
 - [ ] Comments explain **why**, not what.
 - [ ] Docs updated when behaviour/schema/API changed; ADR when deviating.
+- [ ] Mobile tasks (M-track) additionally meet the mobile DoD extension in §5.
 - [ ] Hooks pass (`check-frontend-rules`, `check-backend-rules`, `check-secrets`).
 - [ ] CI checks green on the PR — web, API and `SonarCloud Code Analysis` (ADR-0007; the gate is this DoD, `main` has no branch protection).
 
@@ -72,3 +73,13 @@
 - Works at 360px; dark mode; keyboard focus.
 
 **Security PR (phase end)** — `06 §12` list + secrets scan + dependency audit (`pnpm audit`, `mvn dependency-check` optional).
+
+## 5. Mobile tests (`apps/mobile` — jest-expo · React Native Testing Library)
+
+- **Runner**: `jest-expo` preset, `pnpm -F mobile test` (wired into CI with M-T2). Component tests with `@testing-library/react-native`.
+- **Unit**: ported formatters (same cases as §3 — money/qty/date with `ar-SY-u-nu-latn` and `Asia/Damascus`); cart store (shared schema `tishreen.cart.v1`: add/merge/step/persistence/version migration); session store (SecureStore mocked: refresh rotation, restore-on-start, logout wipes); `oklch → hex` utility golden-tested against the hex comments in `08 §2.1`.
+- **Component**: `ProductCard` (unavailable state), `QtyStepper` (KG/PIECE steps and minimums), `OtpInput` (paste, LTR digits), `StatusTimeline` — each rendered with `I18nManager.isRTL` mocked true **and** false; assert no physical style properties (`left/right/marginLeft/marginRight/paddingLeft/paddingRight/textAlign:'left'|'right'`) via a custom matcher, mirroring the web's `toHaveNoPhysicalDirectionClasses`.
+- **Static source guards** (jest, because the `check-frontend-rules` hook watches only `apps/web` and `packages/ui`, not `apps/mobile`): (a) literal-text scan over `apps/mobile/app` + `src` **source files** (not rendered trees — rendered `t()` output is Arabic too): Arabic letters or quoted English sentences in JSX/strings outside the `src/i18n/*.json` resources fail the check, same heuristic as the web hook; (b) external-runtime-URL scan (`cdn`, `unpkg`, `jsdelivr`, `fonts.googleapis`, `googleapis.com`, `firebase`, `updates.url`) over sources + `app.json` — doc `11`'s zero-external-imports rule has no hook coverage on mobile either; (c) i18n parity: every key in a shared area (`10 §7.1`) present in mobile `ar.json` must equal the web `ar.json` string verbatim, and mobile `en.json` keys must be a subset of mobile `ar.json`.
+- **E2E**: not automated in v1 (Maestro is a v1.1 candidate — `14-mobile.md §9`); instead the manual release protocol `14-mobile.md §8` plus `11 §checklist 7` is mandatory before every release.
+
+**Mobile DoD extension** (on top of §1, for every M-task): works RTL+LTR in ar/en on a physical low-end Android; no literal UI text; colours only via `useTheme()` tokens (`08 §9`); lists use `FlatList` with pagination (`onEndReached`, `size=24`); every screen has loading/empty/error states; refresh token only in SecureStore; APK size ≤ 50 MB.

@@ -88,11 +88,26 @@ Branching (ADR-0002): GitHub issue branches off `main` — one branch + PR per t
 
 ---
 
-## Mobile track (ADR-0004) — native app alongside the web PWA
-**Outcome**: `apps/mobile` (Expo SDK 57, TypeScript strict) ships the customer experience as a native app; the web app — including the driver PWA offline shell from P5-T3 — stays exactly as specified above.
+## Mobile track (ADR-0004 · spec `14-mobile.md`) — native customer app alongside the web PWA
+**Outcome**: `apps/mobile` (Expo SDK 57, TypeScript strict) ships the customer purchase loop (`14-mobile.md §1`) as a native Android-first app; the web app — including the driver PWA offline shell from P5-T3 — stays exactly as specified above. Every task reuses the `06-api.md` contracts 1:1 and respects `11-syria-constraints.md` (bundled assets, APK sideload). Each M-task starts only after the web phase it depends on is done.
 
-1. **M-T1 Scaffold** — Expo workspace `apps/mobile` in the monorepo (turbo tasks `dev` `lint` `format` `typecheck`), i18n shell ar/en (no literal UI text), RTL enabled, ESLint + strict tsconfig.
-2. **M-T2+** — mobile feature tickets are cut per feature after the corresponding web phase is done; they reuse the `06-api.md` contracts 1:1 and must respect `11-syria-constraints.md` (bundled assets, APK sideload distribution as Play-Store fallback).
+1. **M-T1 Scaffold** *(done)* — Expo workspace `apps/mobile` in the monorepo (turbo tasks `dev` `lint` `format` `typecheck`), i18n shell ar/en (no literal UI text), RTL enabled, ESLint + strict tsconfig.
+2. **M-T2 Foundations** (after Phase 1) — expo-router shell with the tab/stack tree from `14-mobile.md §2` (placeholder screens); `ThemeProvider` + token objects + `oklch → hex` utility (`08 §9`); fonts bundled via `expo-font`; RTL bootstrap with reload prompt, formatters ported, `<Isolated>` helper (`10 §7`); jest-expo + RNTL wired (`13 §5`).
+   **Checklist**: app boots in `ar` RTL and `en` LTR (reload flow works, OTA disabled — `10 §7.3`); all three presets render from `GET /theme` (mock) in light+dark; money/qty/date formatters **and** Arabic plural forms (`intl-pluralrules` polyfill) verified on a real Android device; `pnpm -F mobile test` green in CI incl. the static guards of `13 §5`.
+3. **M-T3 Native auth** (after Phase 2) — API: `X-Client: mobile` variant of login/refresh (refresh token in body, same rotation/`pv` — `06 §1`) + tests (unit + MockMvc, incl. "cookie client gets no body token" and vice versa); app: session store (SecureStore + in-memory access token), api client with silent refresh, `login`/`register`/`activate` screens, guards (MF-02).
+   **Checklist**: MF-02 AC; refresh token absent from AsyncStorage and logs; kill/restart restores session; `PENDING` user is forced to `activate`.
+4. **M-T4 Catalogue & home** (after Phase 3) — home blocks, categories, `c/[slug]`, `p/[slug]` (stepper, options, estimate notice), `search.tsx`, `ProductCard`/`QtyStepper` natives (MF-03, MF-04).
+   **Checklist**: MF-03/MF-04 AC; infinite scroll at `size=24`; unavailable products not addable; screens pass the RTL/i18n checks of `13 §5`.
+5. **M-T5 Cart & quote** (after Phase 3) — zustand + AsyncStorage cart (`tishreen.cart.v1`), cart tab with quote warnings (MF-05).
+   **Checklist**: MF-05 AC; cart survives app kill; guest → login keeps the cart; unavailable line blocks checkout.
+6. **M-T6 Checkout & wa.me** (after Phase 4; points slider live after Phase 6, disabled before — like web P4-T5) — full checkout (fulfillment toggle, pickup slots, address list, zone fee/min-order, note, points slider, offer line, summary), `Linking.openURL(whatsappUrl)` flow, banner screen (MF-06).
+   **Checklist**: MF-06 AC — order persisted before WhatsApp opens (assert order in list after airplane-mode-cancel of the WhatsApp handoff); browser fallback when WhatsApp missing; all money values server-quoted.
+7. **M-T7 Orders & account** (after Phase 4) — orders tab, `orders/[nr]` with timeline + polling/AppState pause, cancel/reorder/WhatsApp-again, account tab (profile, language, password), `account/addresses` CRUD without map pin (MF-07, MF-08).
+   **Checklist**: MF-07/MF-08 AC; polling stops in background; ownership errors surface as "not found", not "forbidden".
+8. **M-T8 Release & hardening** (after Phase 5 infra) — local Gradle release build, keystore + signing, nginx `/downloads/` hosting with checksum + download page, versioning (`09 §5`); low-end-Android pass, APK ≤ 50 MB, manual release protocol `14-mobile.md §8`, in-Syria checklist item 7 (`11`).
+   **Checklist**: signed APK installs and runs the full journey on a 2 GB device; download page reachable from the web footer; `11 §checklist 7` green; keystore backup verified.
+
+**Explicitly not in the M-track** until decided/ticketed: push notifications (open decision `14-mobile.md` D-M1 — ask Mohamad first), support/offers/points screens, map pin, offline persistence, iOS distribution (`14-mobile.md §1/§9`).
 
 ---
 
