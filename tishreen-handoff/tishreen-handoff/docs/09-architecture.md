@@ -15,7 +15,7 @@ Tishreen-Market/                  # working repo — implementation at the repo 
 │  ├─ src/locales/ar.json · en.json
 │  ├─ src/styles/globals.css
 │  └─ public/fonts/ · public/icons/ · public/manifest.webmanifest
-├─ apps/mobile/                   # Expo SDK 57 native app (ADR-0004) — App.tsx · src/i18n/
+├─ apps/mobile/                   # Expo SDK 57 native customer app (ADR-0004; spec 14-mobile.md) — expo-router app/ · src/{components,theme,lib,i18n}
 ├─ packages/ui/                   # shadcn components + brand + custom (qty-stepper, otp-input, status-timeline, map-picker) — web-only (ADR-0004)
 ├─ api/                           # Spring Boot 3 · Java 21 · Maven
 │  ├─ src/main/java/com/tishreen/api/
@@ -142,3 +142,9 @@ Dev accounts: see `04-seed.sql` Part B (`Tishreen!Dev1`).
 ## 5. Deployment (Phase 5+)
 - Single VPS (non-US-blocking provider), Ubuntu, nginx (TLS, static web, `/api` proxy, `/media` static for local-disk), systemd service for the API (fat jar), Postgres local, fonts/Leaflet/tiles reachability test from inside Syria before launch.
 - Web is prerendered/SSR by TanStack Start Node adapter behind nginx; API and web share the domain (`/api/v1`).
+
+### Mobile build & release (`apps/mobile` — ADR-0004, spec `14-mobile.md`)
+- **Builds are local**: `npx expo prebuild --platform android` + Gradle `assembleRelease` is the normative release path. `eas build --local` compiles locally but still authenticates against Expo's US-hosted expo.dev API, so it — like EAS cloud builds — is personal developer convenience only, never a required pipeline step (`11`). OTA updates stay disabled (`updates.enabled: false`, no `updates.url` — `10 §7.3`). iOS builds are dev-only (no distribution channel in Syria — `11`).
+- **Signing**: one Android release keystore, generated once, kept **outside git** (path + passwords via env, documented in `.env.example`); a copy lives with the nightly backup set — losing the keystore breaks APK update continuity for every installed device.
+- **Hosting**: the signed APK is published on our own domain behind nginx — `/downloads/tishreen-<version>.apk` plus a stable `/downloads/tishreen-latest.apk` alias and a `.sha256` checksum file; a small download page (linked from the web app footer) carries install instructions for sideloading. No Play-Store dependency (`11`).
+- **Versioning**: bump `apps/mobile/app.json` `version` and Android `versionCode` on every release; the release commit message lists user-facing changes. Release gate: the manual protocol in `14-mobile.md §8`.

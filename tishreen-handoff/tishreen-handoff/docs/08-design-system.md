@@ -390,6 +390,19 @@ Decision: **Tajawal** for text, **Tufuli Arabic** for main headings (display/2xl
 ## 8. Accessibility
 - Every preset is contrast-audited in both modes; the server gate (§2) keeps it that way after admin changes. Focus ring `ring-ring`. Form errors wired with `aria-describedby`. Status badges carry text, not colour only. OTP input announces remaining attempts. Driver screens readable in sunlight: body ≥ 16px, primary buttons ≥ 48px tall.
 
+## 9. Token transfer to React Native (`apps/mobile` — ADR-0004, spec `14-mobile.md`)
+
+React Native has no Tailwind and no CSS variables — the tokens travel as data, the rules of §3 stay in force:
+
+- **Token objects, not styles**: `apps/mobile/src/theme/tokens.ts` exports the three presets × light/dark as typed objects (`background`, `foreground`, `card`, `primary`, `primaryForeground`, `primarySubtle`, `link`, `destructive`, `destructiveSubtle`, `muted`, `mutedForeground`, `border`, `ring`, …) with **hex** values converted from §2.1 (the hex comments there are the reference; rose values converted once from oklch). A `ThemeProvider`/`useTheme()` hook feeds `StyleSheet` styles — components never contain a literal colour (same rule as §3.1, enforced by review + `13 §5`, because the `check-frontend-rules` hook watches only `apps/web` and `packages/ui`, not `apps/mobile`).
+- **Preset & hue**: the app reads `GET /theme` at start (cached); the preset selects the token object. When `primaryHue` is set, the server's `tokens` (oklch strings for light+dark) are converted client-side with a small `oklch → hex` utility (`src/theme/oklch.ts`, golden-tested against §2.1) — RN cannot parse `oklch()` colour strings.
+- **Dark mode**: `useColorScheme()` default + manual override (persisted, AsyncStorage) — orthogonal to the preset, exactly like web.
+- **`text-link` rule carries over**: coloured text/links in dark mode use the `link` token, never `primary` (§3.2 — 1.8:1 on the dark background in rose).
+- **Radius & spacing**: `theme.radius = {sm, md, lg, xl, '2xl'}` derived from the preset base (rose 10 → 6/8/10/14/18 px; orange/sky 14 → 10/12/14/18/22 px, per the §2.1 calc chain); `theme.space` mirrors §6 (4 8 12 16 20 24 32 40 48 64).
+- **Fonts**: the same self-hosted files, bundled into the app via `expo-font` (`assets/fonts/`): Tajawal 400/500/700/800 (body), Cairo 500/600/700 (labels/prices), IBM Plex Mono 500 (codes), Baloo Bhaijaan 2 600/700/800 as the display stand-in — swapped for Tufuli Arabic when the licensed files arrive, same rule as §5. Never a runtime font download.
+- **Components**: RN counterparts live in `apps/mobile/src/components/` and keep the web names (`ProductCard`, `QtyStepper`, `OtpInput`, `StatusTimeline`) — `packages/ui` stays web-only (ADR-0004), the Figma mapping stays `07 §9`.
+- **RTL**: logical style properties only (`marginStart/End`, `start/end`) — details in `10 §7`; touch targets ≥ 44×44 px app-wide (the §6 driver rule extended to the whole customer app) and primary buttons ≥ 48 px tall as in §8.
+
 ## History
 - 2026-08-19: rose / orange / sky presets audited and added as Figma modes.
 - 2026-08-20: Stone/Green + emerald primary, brand-mark components and the name «تشرين مول» tried — **reverted by Mohamad**; not part of the design.

@@ -16,6 +16,7 @@ These are not "nice to have" — each one changes a technical decision. Flag the
 | **Arabic addresses without reliable street names** | Free-text `details` + zone (mandatory) + optional map pin. Never require postcode/street fields. |
 | **Sanctions on package registries?** | npm/Maven Central are reachable; pin versions in lockfiles; keep a local mirror option documented (`pnpm fetch` cache, Maven `~/.m2` tarball) for deployment from inside Syria. |
 | **Currency volatility (SYP)** | Prices are plain numbers with no decimals in UI; admin bulk price update endpoint is **not** in scope now but `PRODUCT_PRICE_EDIT` audit makes frequent changes traceable. |
+| **App-store distribution unreliable** (Google Play restricted in Syria; Apple App Store unavailable) | The customer app (`apps/mobile`, `14-mobile.md`) ships as a **signed APK sideloaded from our own domain** (nginx download page with install instructions + SHA-256 checksum — `09 §5`); a Google Play listing is a bonus, never the only path. iOS builds are dev-only, not distributed. No Play-Services-only dependencies — this rules out FCM push (see `14-mobile.md` D-M1). Release builds are made **locally** (Gradle); Expo's US-hosted EAS cloud must never be a required dependency of the release pipeline. |
 
 ## Pre-launch checklist (run from a Syrian connection)
 1. Load `/`, `/c/:slug`, `/p/:slug` on mobile data — all fonts/icons render, no console network errors.
@@ -24,3 +25,4 @@ These are not "nice to have" — each one changes a technical decision. Flag the
 4. Customer: place an order — `wa.me` opens WhatsApp with the prepared text.
 5. Staff: generate OTP — link opens WhatsApp to the customer's number.
 6. Backups: `/it/backups` shows last night's file; `infra/scripts/restore.sh` tested on a scratch DB.
+7. Mobile: download the APK from our domain over mobile data on a **low-end Android** (2 GB RAM class), install and start it — first start reaches an interactive home screen ≤ 5 s, fonts render, browsing and placing an order works (`wa.me` opens WhatsApp with the prepared text). Full protocol: `14-mobile.md §8`.

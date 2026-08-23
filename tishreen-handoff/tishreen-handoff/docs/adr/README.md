@@ -16,3 +16,4 @@ add the new ADR to this index, and the `sync-wiki` Action mirrors everything to 
 | 0007 | [CI hardening and scope (SonarCloud, SHA pinning, web-only)](0007-ci-hardening-and-scope.md) | accepted | 2026-08-22 |
 | 0008 | [Wiki mirror as the authoritative reference (`sync-wiki`)](0008-wiki-sync-authoritative-reference.md) | accepted | 2026-08-22 |
 | 0009 | [Plain JDBC in Phase 1; Spring Data JPA and MapStruct from Phase 2](0009-jdbc-phase1-jpa-phase2.md) | accepted | 2026-08-22 |
+| 0010 | [Cookie-less refresh-token variant for native clients (`X-Client: mobile`)](0010-native-auth-refresh-token-variant.md) | accepted | 2026-08-23 |

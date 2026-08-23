@@ -7,7 +7,7 @@
 ## 1. What we are building
 
 A bilingual (Arabic-first, RTL) grocery e-commerce platform for a single physical store in Aleppo, Syria.
-Five user roles share one REST API, one web app (a PWA, including the driver offline shell) and one native mobile app (`apps/mobile`, Expo — ADR-0004):
+Five user roles share one REST API and one web app (a PWA, including the driver offline shell); customers additionally get a native mobile app (`apps/mobile`, Expo — ADR-0004, spec `14-mobile.md`; staff/admin/driver/IT stay web-only):
 
 | Role | Code | What they do |
 |---|---|---|
@@ -45,6 +45,7 @@ Five user roles share one REST API, one web app (a PWA, including the driver off
 | 11 | `11-syria-constraints.md` | Hosting, CDN, fonts, maps, offline driver, backups |
 | 12 | `12-build-plan.md` | Six phases with task lists and acceptance criteria |
 | 13 | `13-quality.md` | Definition of done, test strategy, review checklists |
+| 14 | `14-mobile.md` | Customer mobile app (`apps/mobile`): scope, screens, native auth, push decision, distribution |
 | ADR | `adr/` (index: `adr/README.md`) | Architecture Decision Records — every recorded deviation/decision (template `adr/0000-template.md`), mirrored to the wiki (ADR-0008) |
 
 Design source: Figma file key `0RLOI0q7lWCK1Rme8JjkKu` (single file, all roles, light+dark, 49 routed screens + map picker).
@@ -53,7 +54,7 @@ Design source: Figma file key `0RLOI0q7lWCK1Rme8JjkKu` (single file, all roles, 
 
 **Frontend (web)** — TanStack Start (React 19, file-based routes) · TypeScript strict · Tailwind v4 · shadcn/ui (CLI-managed, `--rtl`) · react-i18next · TanStack Query · react-hook-form + zod · Leaflet (bundled, no CDN) · vite-plugin-pwa (driver offline shell — the web app **stays a PWA**) · Turborepo monorepo (`apps/web`, `apps/mobile`, `packages/ui`) · pnpm 10 (pinned via root `packageManager`) · Node 24 (`.nvmrc`; root `engines` requires `>=24`).
 
-**Mobile (native, ADR-0004)** — Expo SDK 57 (React Native 0.86, React 19) · TypeScript strict · i18next + react-i18next (`ar` default, RTL via `expo-localization` `supportsRTL`) · same REST API `/api/v1`, no separate backend · workspace `apps/mobile`; `packages/ui` stays web-only (shadcn/DOM).
+**Mobile (native, ADR-0004 — spec `14-mobile.md`)** — Expo SDK 57 (React Native 0.86, React 19) · TypeScript strict · expo-router · TanStack Query · i18next + react-i18next (`ar` default, RTL via `expo-localization` `supportsRTL`) · same REST API `/api/v1`, no separate backend · customer app only (staff/admin/driver stay web) · workspace `apps/mobile`; `packages/ui` stays web-only (shadcn/DOM).
 
 **Backend** — Spring Boot 3.3+ (Java 21) · Spring Security (JWT) · Spring Data JPA · PostgreSQL 15 · Flyway · Spring AOP (audit) · Bean Validation · MapStruct (DTO mapping, optional) · springdoc-openapi · Maven (`./mvnw`). Modular Monolith: one package per domain, boundaries enforced by ArchUnit. Phasing (ADR-0009): the Phase-1 skeleton runs on plain `spring-boot-starter-jdbc`; Spring Data JPA entities arrive with Phase 2 (12 P2-T1), MapStruct optionally from then on.
 
